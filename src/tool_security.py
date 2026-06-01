@@ -51,6 +51,84 @@ NON_ADMIN_BLOCKED_TOOLS = {
 }
 
 
+# Plan mode: the agent may investigate but must not mutate anything. Only these
+# read-only/inspection tools stay enabled; everything else (writes, sends,
+# manage_*, model serving, MCP, etc.) is blocked. Allowlist rather than blocklist
+# so any newly added tool defaults to BLOCKED in plan mode — fail safe.
+#
+# bash/python are allowed for richer investigation, but they CAN mutate (write
+# files, hit the network) and can't be constrained to read-only at the tool
+# layer. The plan-mode system prompt warns HARD that shell is inspection-only.
+# This is a prompt-enforced boundary for shell; every other write path is
+# hard-blocked below.
+PLAN_MODE_READONLY_TOOLS = {
+    "read_file",
+    "web_search",
+    "web_fetch",
+    "search_chats",
+    "list_models",
+    "list_sessions",
+    "list_emails",
+    "read_email",
+    "list_served_models",
+    "list_downloads",
+    "list_cached_models",
+    "search_hf_models",
+    "list_serve_presets",
+    "list_cookbook_servers",
+    "resolve_contact",
+    "chat_with_model",
+    "ask_teacher",
+    "bash",
+    "python",
+}
+
+
+# Known mutating/external tools, ALWAYS blocked in plan mode. This is both a
+# floor (some real tools — e.g. manage_notes, generate_image — are XML-invocable
+# and absent from FUNCTION_TOOL_SCHEMAS, so the dynamic universe alone would miss
+# them) and the fail-closed fallback if the schema list can't load at all. Plan
+# mode must NEVER fail open (silently allow mutations). Keep in sync with new
+# mutating tools.
+_PLAN_MODE_FALLBACK_BLOCK = {
+    "write_file", "create_document", "edit_document", "update_document",
+    "suggest_document", "manage_documents", "create_session", "manage_session",
+    "send_to_session", "pipeline", "manage_memory", "manage_skills",
+    "manage_tasks", "manage_notes", "manage_endpoints", "manage_mcp",
+    "manage_webhooks", "manage_tokens", "manage_settings", "manage_contact",
+    "manage_calendar", "api_call", "app_api", "ui_control",
+    "send_email", "reply_to_email", "bulk_email", "delete_email",
+    "archive_email", "mark_email_read", "download_model", "serve_model",
+    "stop_served_model", "cancel_download", "adopt_served_model", "serve_preset",
+    "generate_image", "edit_image", "trigger_research", "manage_research",
+}
+
+
+def plan_mode_disabled_tools() -> Set[str]:
+    """Tools to disable in plan mode: every built-in tool not on the read-only
+    allowlist. MCP tools are dynamic and disabled separately (the loop drops the
+    MCP manager entirely in plan mode)."""
+    try:
+        # agent_tools / tool_parsing / tool_schemas form a mutually-circular
+        # cluster that only resolves cleanly when entered via agent_tools.
+        # Import it first so the lazy schema import works even from a cold
+        # import (e.g. tests) — not just after the app has wired everything up.
+        import src.agent_tools  # noqa: F401
+        from src.tool_schemas import FUNCTION_TOOL_SCHEMAS
+
+        all_names = {
+            (t.get("function") or {}).get("name")
+            for t in FUNCTION_TOOL_SCHEMAS
+        }
+        all_names.discard(None)
+    except Exception as exc:
+        logger.warning("Unable to load tool schemas for plan-mode gating: %s", exc)
+        all_names = set()
+    # Union the known-mutating floor so XML-invocable tools missing from the
+    # schema list are still blocked, and so we fail closed if all_names is empty.
+    return (all_names | _PLAN_MODE_FALLBACK_BLOCK) - PLAN_MODE_READONLY_TOOLS
+
+
 def is_public_blocked_tool(tool_name: Optional[str]) -> bool:
     """Return True when a non-admin/public user must not execute this tool.
 
