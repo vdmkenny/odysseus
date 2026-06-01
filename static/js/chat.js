@@ -12,6 +12,7 @@ import chatRenderer from './chatRenderer.js';
 import chatStream from './chatStream.js';
 import { addAITTSButton } from './tts-ai.js';
 import markdownModule from './markdown.js';
+import planWindowModule from './planWindow.js';
 import spinnerModule from './spinner.js';
 import presetsModule from './presets.js';
 import fileHandlerModule from './fileHandler.js';
@@ -85,6 +86,7 @@ import createResearchSynapse from './researchSynapse.js';
   let _streamSessionId = null; // Session ID for the currently active reader loop
   let _lastReaderActivity = 0; // Timestamp of last reader.read() success — used to detect frozen streams
   let _webLockRelease = null;  // Function to release the Web Lock held during streaming
+  let _forcePlanOff = false;   // One-shot: suppress plan_mode for the next send (Approve & Run)
 
   /** Check if an SSE reader is still actively connected for a session. */
   function hasActiveStream(sessionId) {
@@ -767,6 +769,17 @@ import createResearchSynapse from './researchSynapse.js';
       }
       if (el('bash-toggle').checked) {
         fd.append('allow_bash', 'true');
+      }
+      // Plan mode: agent investigates read-only and proposes a plan to approve.
+      // Only meaningful in agent mode, and never alongside deep research.
+      // _forcePlanOff is a one-shot set by "Approve & Run" so the execution turn
+      // runs with full tools even though the Plan toggle is still on.
+      const _planToggle = el('plan-toggle');
+      const planTurn = !_forcePlanOff && isAgentMode && _planToggle && _planToggle.checked && !el('research-toggle').checked;
+      _forcePlanOff = false;
+      if (planTurn) {
+        fd.append('plan_mode', 'true');
+        fd.set('mode', 'agent');
       }
       const ragChk = el('rag-toggle');
       if (ragChk && !ragChk.checked) {
@@ -2455,6 +2468,51 @@ import createResearchSynapse from './researchSynapse.js';
         // Attach footer to the last visible bubble (roundHolder for multi-round agent, holder for single)
         const footerTarget = (roundHolder && roundHolder !== holder && roundHolder.style.display !== 'none') ? roundHolder : holder;
         footerTarget.appendChild(createMsgFooter(footerTarget));
+        // Plan mode: the agent has proposed a plan — offer to approve & execute it.
+        // Approving re-sends with plan_mode suppressed (full tools) for one turn.
+        if (planTurn && accumulated.trim()) {
+          const _planText = accumulated;
+          const _runApproved = () => {
+            _approveWrap.remove();
+            _forcePlanOff = true;
+            // Approving exits plan mode for good — turn the Plan toggle OFF so the
+            // execution AND any follow-up turns keep full write tools, not just
+            // this one send. (Flip via its own handler so the pill + saved pref
+            // stay in sync.)
+            const _planChk = el('plan-toggle');
+            const _planBtn = el('plan-toggle-btn');
+            if (_planChk && _planChk.checked && _planBtn) _planBtn.click();
+            const _inp = el('message');
+            if (_inp) {
+              _inp.value = 'Approved — execute the plan. Work through your checklist above in '
+                + 'order. After you finish each step, restate the FULL checklist with completed '
+                + 'items marked `- [x]` so I can see progress. Do the next unchecked item until all are done.';
+              _inp.dispatchEvent(new Event('input'));
+            }
+            // Show a clean bubble; the full instruction still goes to the model.
+            _displayOverride = 'Approved the plan.';
+            handleChatSubmit({ preventDefault() {} });
+          };
+          var _approveWrap = document.createElement('div');
+          _approveWrap.className = 'plan-approve-bar';
+          const _approveBtn = document.createElement('button');
+          _approveBtn.type = 'button';
+          _approveBtn.className = 'plan-approve-btn';
+          _approveBtn.textContent = 'Approve & Run';
+          _approveBtn.addEventListener('click', _runApproved);
+          // Open the plan in a draggable, side-dockable window (reuses the
+          // shared modal framework). Approving from the window runs it too.
+          const _openBtn = document.createElement('button');
+          _openBtn.type = 'button';
+          _openBtn.className = 'plan-open-btn';
+          _openBtn.textContent = 'Open in window';
+          _openBtn.addEventListener('click', () => {
+            planWindowModule.openPlanWindow(_planText, _runApproved);
+          });
+          _approveWrap.appendChild(_approveBtn);
+          _approveWrap.appendChild(_openBtn);
+          footerTarget.appendChild(_approveWrap);
+        }
         // Add "View Report" link for completed research
         if (_researchingStreamIds.has(streamSessionId)) {
           _appendViewReportLink(footerTarget, streamSessionId);

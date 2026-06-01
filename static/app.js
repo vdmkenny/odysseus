@@ -1553,6 +1553,7 @@ function initializeEventListeners() {
   const MODE_TOOLS = [
     { btnId: 'web-toggle-btn',  checkboxId: 'web-toggle',  stateKey: 'web' },
     { btnId: 'bash-toggle-btn', checkboxId: 'bash-toggle', stateKey: 'bash' },
+    { btnId: 'plan-toggle-btn', checkboxId: 'plan-toggle', stateKey: 'plan' },
   ];
 
   function _modeKey(stateKey, mode) { return `${stateKey}_${mode}`; }
@@ -1561,6 +1562,9 @@ function initializeEventListeners() {
     const state = loadToggleState();
     const key = _modeKey(stateKey, mode);
     if (Object.prototype.hasOwnProperty.call(state, key)) return !!state[key];
+    // Plan mode is opt-in: never default it on, otherwise every agent turn
+    // would be forced into planning.
+    if (stateKey === 'plan') return false;
     return mode === 'agent'; // default: ON in agent, OFF in chat
   }
 
@@ -1573,6 +1577,7 @@ function initializeEventListeners() {
   const TOOL_TOGGLE_TOAST_LABELS = {
     web: 'Web search',
     bash: 'Shell',
+    plan: 'Plan mode',
   };
 
   function showToolToggleToast(stateKey, active) {
@@ -1686,6 +1691,7 @@ function initializeEventListeners() {
   }
   setupToggle('web-toggle-btn', 'web-toggle', 'web');
   setupToggle('bash-toggle-btn', 'bash-toggle', 'bash');
+  setupToggle('plan-toggle-btn', 'plan-toggle', 'plan');
 
   // Document editor toggle (special: uses module panel, not a checkbox)
   const overflowDocBtn = el('overflow-doc-btn');

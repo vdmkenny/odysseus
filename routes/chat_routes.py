@@ -380,7 +380,11 @@ def setup_chat_routes(
         search_context = form_data.get("search_context")  # pre-fetched web search results (compare mode)
         compare_mode = str(form_data.get("compare_mode", "")).lower() == "true"
         incognito = str(form_data.get("incognito", "")).lower() == "true"
+        plan_mode = str(form_data.get("plan_mode", "")).lower() == "true"
         chat_mode = str(form_data.get("mode", "")).lower()  # 'chat' or 'agent'
+        # Plan mode is a modifier on agent mode — it only makes sense with tools.
+        if plan_mode:
+            chat_mode = "agent"
         # Did the USER explicitly pick agent mode? (vs. us auto-escalating
         # below). Skill extraction should only learn from real agent sessions,
         # not chats we quietly promoted for a notes/calendar intent.
@@ -616,6 +620,13 @@ def setup_chat_routes(
             # In chat mode compare, disable ALL agent tools (no bash, python, file ops)
             if chat_mode == 'chat':
                 disabled_tools.update({"bash", "python", "read_file", "write_file", "web_search", "web_fetch", "search_chats", "manage_tasks"})
+
+        # Plan mode: investigate read-only, propose a plan, don't mutate. Block
+        # every tool not on the read-only allowlist. (stream_agent_loop enforces
+        # this again + drops MCP, so this is belt-and-suspenders.)
+        if plan_mode:
+            from src.tool_security import plan_mode_disabled_tools
+            disabled_tools.update(plan_mode_disabled_tools())
 
         async def stream_with_save() -> AsyncGenerator[str, None]:
             # _effective_mode is read-only here; closure captures it from
@@ -963,6 +974,7 @@ def setup_chat_routes(
                         disabled_tools=disabled_tools if disabled_tools else None,
                         owner=_user,
                         fallbacks=_fallback_candidates,
+                        plan_mode=plan_mode,
                     ):
                         if chunk.startswith("data: ") and not chunk.startswith("data: [DONE]"):
                             try:

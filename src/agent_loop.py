@@ -19,7 +19,7 @@ from src.llm_core import stream_llm, stream_llm_with_fallback, _is_ollama_native
 from src.model_context import estimate_tokens
 from src.settings import get_setting
 from src.prompt_security import untrusted_context_message
-from src.tool_security import blocked_tools_for_owner
+from src.tool_security import blocked_tools_for_owner, plan_mode_disabled_tools
 from src.agent_tools import (
     parse_tool_blocks,
     strip_tool_blocks,
@@ -1379,6 +1379,35 @@ def _empty_response_fallback(
     return _error_msg, f'data: {json.dumps({"delta": _error_msg})}\n\n'
 
 
+PLAN_MODE_DIRECTIVE = (
+    "## PLAN MODE — OVERRIDES EVERYTHING ELSE BELOW\n"
+    "You are in PLAN MODE. Your ONLY job this turn is to PROPOSE a plan. You have "
+    "NOT done anything yet. Do NOT claim you created, wrote, ran, sent, or changed "
+    "anything — that would be a lie.\n"
+    "\n"
+    "ABSOLUTE RULE — DO NOT MUTATE ANYTHING. Every write/state-changing tool is "
+    "disabled and will be rejected. You MAY use read-only tools to investigate: "
+    "read_file, web_search/web_fetch, search_chats, list_*, and `bash`/`python`.\n"
+    "\n"
+    "bash/python are for INSPECTION ONLY. This is critical and easy to get wrong: "
+    "the shell is NOT blocked, so it is on YOU to keep it read-only. ALLOWED shell: "
+    "`ls`, `cat`, `grep`, `find`, `git status`/`git log`/`git diff`, `head`, `pwd`, "
+    "`wc`. FORBIDDEN shell (NEVER, even if it seems convenient): no `>`/`>>` "
+    "redirects, no `touch`, `mkdir`, `rm`, `mv`, `cp`, `sed -i`, `tee`, `install`, "
+    "`pip`/`npm install`, `git commit`/`push`, no creating or editing ANY file, no "
+    "network writes. If the task is 'write a file', your plan is to DESCRIBE writing "
+    "it — you do NOT write it now. When unsure whether a command changes state, do "
+    "NOT run it; put it in the plan instead.\n"
+    "\n"
+    "OUTPUT: present the plan as a GitHub-style checklist, one concrete step per line:\n"
+    "- [ ] first action you will take once approved\n"
+    "- [ ] next action\n"
+    "Each item = one concrete action (file to create/edit, command to run, side "
+    "effect). Do not execute. Do not end with 'Done' or anything implying the work "
+    "is finished. End your turn with the checklist."
+)
+
+
 async def stream_agent_loop(
     endpoint_url: str,
     model: str,
@@ -1396,6 +1425,7 @@ async def stream_agent_loop(
     owner: Optional[str] = None,
     relevant_tools: Optional[Set[str]] = None,
     fallbacks: Optional[List[tuple]] = None,
+    plan_mode: bool = False,
     _is_teacher_run: bool = False,
 ) -> AsyncGenerator[str, None]:
     """Streaming agent loop generator.
@@ -1419,6 +1449,13 @@ async def stream_agent_loop(
         # public/non-admin users rather than trying to enumerate every tool.
         mcp_mgr = None
 
+    if plan_mode:
+        # Plan mode: investigate read-only, propose a plan, don't execute. The
+        # route also unions the read-only-disabled set, but enforce here too so
+        # the loop is safe regardless of caller. MCP stays available but is
+        # filtered to read-only tools below (after the disabled map is loaded).
+        disabled_tools.update(plan_mode_disabled_tools())
+
     _t0 = time.time()
     _needs_admin = _detect_admin_intent(messages)
     _last_user = _extract_last_user_message(messages)
@@ -1426,6 +1463,13 @@ async def stream_agent_loop(
     # not just the latest message, so short follow-ups don't drop just-used tools.
     _retrieval_query = _recent_context_for_retrieval(messages) or _last_user
     _mcp_disabled_map = _load_mcp_disabled_map() if mcp_mgr else {}
+    if plan_mode and mcp_mgr:
+        # Allow read-only MCP tools to investigate, block write/unknown ones:
+        # hide them from the schemas AND reject them at runtime by qualified name.
+        _mcp_block_map, _mcp_block_q = mcp_mgr.plan_mode_blocked_mcp()
+        for _sid, _names in _mcp_block_map.items():
+            _mcp_disabled_map.setdefault(_sid, set()).update(_names)
+        disabled_tools.update(_mcp_block_q)
     prep_timings["request_setup"] = time.time() - _t0
 
     # RAG-based tool selection: retrieve relevant tools for this query.
@@ -1562,6 +1606,16 @@ async def stream_agent_loop(
         compact=_is_api_model,
         owner=owner,
     )
+    if plan_mode:
+        # Steer the model to investigate-then-propose. Hard tool gating handles
+        # every write path except shell; this directive is what keeps the
+        # intentionally-allowed bash/python read-only, so it must DOMINATE. Put
+        # it at the very TOP of the system prompt (the base prompt is large and
+        # action-oriented — appending buried it, and small models ignored it).
+        if messages and messages[0].get("role") == "system":
+            messages[0]["content"] = PLAN_MODE_DIRECTIVE + "\n\n" + (messages[0].get("content") or "")
+        else:
+            messages.insert(0, {"role": "system", "content": PLAN_MODE_DIRECTIVE})
     prep_timings["prompt_build"] = time.time() - _t2
 
     _t3 = time.time()
