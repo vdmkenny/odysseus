@@ -2065,7 +2065,29 @@ import createResearchSynapse from './researchSynapse.js';
                   if (json.output && json.output.trim()) {
                     outHtml = `<details class="agent-tool-output"><summary>Output</summary><pre>${esc(json.output)}</pre></details>`;
                   }
-                  const cmdHtml2 = cmd ? `<pre class="agent-thread-cmd">${esc(cmd)}</pre>` : '';
+                  // File-write diff (write_file): show a before/after unified diff.
+                  let diffHtml = '';
+                  if (json.diff && json.diff.text) {
+                    const d = json.diff;
+                    // Collapsed summary: filename + +adds (green) / −dels (red).
+                    const stat = [
+                      d.new_file ? '<span class="diff-stat-new">new</span>' : '',
+                      d.added ? `<span class="diff-stat-add">+${d.added}</span>` : '',
+                      d.removed ? `<span class="diff-stat-del">−${d.removed}</span>` : '',
+                    ].filter(Boolean).join(' ');
+                    const rows = d.text.split('\n').map(line => {
+                      let cls = 'diff-ctx';
+                      if (line.startsWith('+++') || line.startsWith('---')) cls = 'diff-meta';
+                      else if (line.startsWith('@@')) cls = 'diff-hunk';
+                      else if (line.startsWith('+')) cls = 'diff-add';
+                      else if (line.startsWith('-')) cls = 'diff-del';
+                      return `<span class="${cls}">${esc(line) || '&nbsp;'}</span>`;
+                    }).join('\n');
+                    diffHtml = `<details class="agent-tool-output agent-tool-diff"><summary><span class="diff-file">${esc(d.file || 'diff')}</span> <span class="diff-summary-stats">${stat}</span></summary><pre class="diff-pre">${rows}</pre></details>`;
+                  }
+                  // For file edits the "command" is the raw JSON args — redundant
+                  // next to the diff, so hide it when we have a diff to show.
+                  const cmdHtml2 = (cmd && !(json.diff && json.diff.text)) ? `<pre class="agent-thread-cmd">${esc(cmd)}</pre>` : '';
                   // Preserve the user's .open choice across the innerHTML
                   // rewrite \u2014 otherwise expanding a running tool collapses
                   // it as soon as the result lands, forcing the user to
@@ -2073,7 +2095,7 @@ import createResearchSynapse from './researchSynapse.js';
                   // bottom of file) so no per-node listener needed.
                   const _wasOpen = currentToolBubble.classList.contains('open');
                   currentToolBubble.className = 'agent-thread-node' + (ok ? '' : ' error') + (_wasOpen ? ' open' : '');
-                  currentToolBubble.innerHTML = `<div class="agent-thread-dot"></div><div class="agent-thread-header"><span class="agent-thread-icon">${ok ? '\u2713' : '\u2717'}</span><span class="agent-thread-tool">${esc(json.tool)}</span><span class="agent-thread-status">${ok ? 'done' : 'failed'}</span><span class="agent-thread-chevron">\u25B6</span></div><div class="agent-thread-content">${cmdHtml2}${outHtml}</div>`;
+                  currentToolBubble.innerHTML = `<div class="agent-thread-dot"></div><div class="agent-thread-header"><span class="agent-thread-icon">${ok ? '\u2713' : '\u2717'}</span><span class="agent-thread-tool">${esc(json.tool)}</span><span class="agent-thread-status">${ok ? 'done' : 'failed'}</span><span class="agent-thread-chevron">\u25B6</span></div><div class="agent-thread-content">${cmdHtml2}${outHtml}${diffHtml}</div>`;
                   // Reset so thinking spinner between tools says "Thinking" not the old tool's label
                   _lastToolName = '';
                   uiModule.scrollHistory();
