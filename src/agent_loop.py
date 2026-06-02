@@ -1426,6 +1426,7 @@ async def stream_agent_loop(
     relevant_tools: Optional[Set[str]] = None,
     fallbacks: Optional[List[tuple]] = None,
     plan_mode: bool = False,
+    workspace: Optional[str] = None,
     _is_teacher_run: bool = False,
 ) -> AsyncGenerator[str, None]:
     """Streaming agent loop generator.
@@ -1606,12 +1607,29 @@ async def stream_agent_loop(
         compact=_is_api_model,
         owner=owner,
     )
+    # Workspace note FIRST so the plan directive (below) lands on top when both
+    # are active — plan's "investigate only" must beat workspace's "edit files".
+    if workspace:
+        _ws_note = (
+            f"## ACTIVE WORKSPACE\n"
+            f"The user is working in this folder: {workspace}\n"
+            f"It IS the project. bash/python run with cwd set here and "
+            f"read_file/write_file/edit_file are confined to it (paths outside are rejected).\n"
+            f"When the user says \"the code\" / \"this project\" / \"the workspace\" "
+            f"or refers to a file WITHOUT a path, they mean THIS folder. Do NOT ask "
+            f"the user for code or a path, and do NOT read a file literally named "
+            f"\"workspace\". Explore it yourself first: `bash` → `git ls-files` (or "
+            f"`ls -R`), then read_file by path RELATIVE to the workspace. To change a "
+            f"file use edit_file (or write_file); never edit_document or a bash heredoc."
+        )
+        if messages and messages[0].get("role") == "system":
+            messages[0]["content"] = _ws_note + "\n\n" + (messages[0].get("content") or "")
+        else:
+            messages.insert(0, {"role": "system", "content": _ws_note})
+        logger.info("[workspace] active for this turn: %s", workspace)
     if plan_mode:
-        # Steer the model to investigate-then-propose. Hard tool gating handles
-        # every write path except shell; this directive is what keeps the
-        # intentionally-allowed bash/python read-only, so it must DOMINATE. Put
-        # it at the very TOP of the system prompt (the base prompt is large and
-        # action-oriented — appending buried it, and small models ignored it).
+        # Investigate-then-propose. Must DOMINATE (topmost), incl. over the
+        # workspace note, so the model proposes a checklist instead of acting.
         if messages and messages[0].get("role") == "system":
             messages[0]["content"] = PLAN_MODE_DIRECTIVE + "\n\n" + (messages[0].get("content") or "")
         else:
@@ -2175,6 +2193,7 @@ async def stream_agent_loop(
                         disabled_tools=disabled_tools,
                         owner=owner,
                         progress_cb=_push_progress,
+                        workspace=workspace,
                     )
                 finally:
                     # Sentinel so the drainer knows to stop.
