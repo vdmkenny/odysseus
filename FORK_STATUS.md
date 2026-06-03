@@ -23,7 +23,6 @@ _Last updated: 2026-06-03._
 | GitHub Copilot provider (device-flow auth) | `feat/github-copilot` | [#1480](https://github.com/pewdiepie-archdaemon/odysseus/pull/1480) | Open, mergeable | none | Modeled on opencode. OpenAI-compatible endpoint at `api.githubcopilot.com`; device-flow OAuth, token used directly as Bearer. |
 | edit_file tool + file-change diffs | `file-write-diff` | [#1239](https://github.com/pewdiepie-archdaemon/odysseus/pull/1239) | Open, mergeable | none | Exact-string disk edit + unified diff; `write_file` shows diff too. |
 | Workspace: confine agent tools to a folder | `workspace-confine` | [#1103](https://github.com/pewdiepie-archdaemon/odysseus/pull/1103) | Open, mergeable | none | Hard path confinement for file tools; bash/python `cwd`. Pairs with plan mode. |
-| CI workflow (syntax + tests) | `ci-checks` | [#1015](https://github.com/pewdiepie-archdaemon/odysseus/pull/1015) | Open, **approved** | none | `.github/workflows/ci.yml`; py compile + node check + pytest. |
 | Plan mode for the chat agent | `plan-mode` | [#638](https://github.com/pewdiepie-archdaemon/odysseus/pull/638) | Open, mergeable | none | Read-only investigate → checklist → approve → execute. |
 | Code-navigation tools (grep, glob, ls) + read_file line ranges | `code-nav-tools` | [#1670](https://github.com/pewdiepie-archdaemon/odysseus/pull/1670) | Open, mergeable | none | Standalone version (confined to the `_resolve_tool_path` allowlist, no workspace dep). ripgrep-backed grep with Python fallback. |
 
@@ -82,6 +81,13 @@ Lower priority: per-action approval prompts, LSP/diagnostics loop.
 |---|---|---|
 | edit_file (first attempt) | [#1171](https://github.com/pewdiepie-archdaemon/odysseus/pull/1171) | Superseded by the focused #1239. |
 | Favorite models in the picker | [#597](https://github.com/pewdiepie-archdaemon/odysseus/pull/597) | Another PR implemented something similar; excluded. |
+| CI workflow (syntax + tests) | [#1015](https://github.com/pewdiepie-archdaemon/odysseus/pull/1015) | Maintainer: CI/tooling is issue-first per CONTRIBUTING, not crowdsourced. Lives fork-only (`ci-checks`). |
+| Text-only emoji streaming fix | [#1692](https://github.com/pewdiepie-archdaemon/odysseus/pull/1692) | Maintainer read it as emoji-rendering (it's a strip-mode bugfix); needs reframe + visual clip. Dropped from build; branch `fix/text-emoji-streaming` parked. |
+
+> **Maintainer is automated + strict on CONTRIBUTING.** Tooling/CI and visual/UI
+> changes are gated: open an **issue first** for tooling, and attach a
+> **screenshot/clip** for anything touching `static/` (DOM). Frame fixes precisely
+> to avoid policy false-positives.
 
 ---
 
@@ -92,17 +98,18 @@ Open PRs — all independent, merge in any order:
   github-copilot (#1480)
   edit_file (#1239)
   workspace-confine (#1103)
-  ci-checks (#1015)
   plan-mode (#638)
   code-nav-tools (#1670)   ← standalone (allowlist-confined)
 
-Fork-only deltas:
+Fork-only deltas (need workspace #1103 [+ plan #638] for a clean upstream PR):
   feat/code-nav-tools (workspace-aware) ──needs──► workspace-confine (#1103) + plan-mode (#638)
-  git-branch-indicator (WIP)            ──needs──► workspace-confine (#1103)
+  feat/git-branch-indicator             ──needs──► workspace-confine (#1103)
+  feat/agents-md (AGENTS.md/CLAUDE.md)  ──needs──► workspace-confine (#1103)
 ```
 
-- All six open PRs are mutually independent and can merge in any order.
-- The fork-only **workspace-aware** code-nav variant and **git-branch-indicator**
-  reuse the workspace path helper (#1103); the workspace-aware code-nav also
-  reuses the plan-mode read-only set (#638). Functional on the fork today
-  regardless — the dependency only matters for a clean upstream cherry-pick.
+- The open PRs are mutually independent and can merge in any order.
+- The fork-only **workspace-aware code-nav**, **git-branch-indicator**, and
+  **agents-md** deltas reuse the workspace plumbing (#1103); the workspace-aware
+  code-nav also reuses the plan-mode read-only set (#638). Functional on the
+  fork today regardless — the dependency only matters for a clean upstream
+  cherry-pick.
