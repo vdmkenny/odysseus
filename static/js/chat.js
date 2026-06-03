@@ -2152,12 +2152,16 @@ import createResearchSynapse from './researchSynapse.js';
                       d.removed ? `<span class="diff-stat-del">−${d.removed}</span>` : '',
                     ].filter(Boolean).join(' ');
                     const rows = d.text.split('\n').map(line => {
-                      let cls = 'diff-ctx';
+                      let cls = 'diff-ctx', text = line;
                       if (line.startsWith('+++') || line.startsWith('---')) cls = 'diff-meta';
                       else if (line.startsWith('@@')) cls = 'diff-hunk';
-                      else if (line.startsWith('+')) cls = 'diff-add';
-                      else if (line.startsWith('-')) cls = 'diff-del';
-                      return `<span class="${cls}">${esc(line) || '&nbsp;'}</span>`;
+                      // Drop the leading diff marker (+/-/space) — the row colour
+                      // already encodes add/del, and keeping it doubles up with
+                      // markdown "- " bullets (reads as "+-"/"--").
+                      else if (line.startsWith('+')) { cls = 'diff-add'; text = line.slice(1); }
+                      else if (line.startsWith('-')) { cls = 'diff-del'; text = line.slice(1); }
+                      else if (line.startsWith(' ')) { text = line.slice(1); }
+                      return `<span class="${cls}">${esc(text) || '&nbsp;'}</span>`;
                     }).join('');  // spans are display:block — a literal \n here would double-space the diff
                     diffHtml = `<details class="agent-tool-output agent-tool-diff"><summary><span class="diff-file">${esc(d.file || 'diff')}</span> <span class="diff-summary-stats">${stat}</span></summary><pre class="diff-pre">${rows}</pre></details>`;
                   }

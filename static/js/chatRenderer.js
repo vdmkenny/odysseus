@@ -1967,12 +1967,14 @@ export function addMessage(role, content, modelName, metadata) {
                 d.removed ? `<span class="diff-stat-del">\u2212${d.removed}</span>` : '',
               ].filter(Boolean).join(' ');
               const rows = d.text.split('\n').map(line => {
-                let cls = 'diff-ctx';
+                let cls = 'diff-ctx', text = line;
                 if (line.startsWith('+++') || line.startsWith('---')) cls = 'diff-meta';
                 else if (line.startsWith('@@')) cls = 'diff-hunk';
-                else if (line.startsWith('+')) cls = 'diff-add';
-                else if (line.startsWith('-')) cls = 'diff-del';
-                return `<span class="${cls}">${esc(line) || '&nbsp;'}</span>`;
+                // Drop the leading diff marker (+/-/space) \u2014 colour encodes add/del.
+                else if (line.startsWith('+')) { cls = 'diff-add'; text = line.slice(1); }
+                else if (line.startsWith('-')) { cls = 'diff-del'; text = line.slice(1); }
+                else if (line.startsWith(' ')) { text = line.slice(1); }
+                return `<span class="${cls}">${esc(text) || '&nbsp;'}</span>`;
               }).join('');  // spans are display:block \u2014 a literal \n would double-space
               evDiffHtml = `<details class="agent-tool-output agent-tool-diff"><summary><span class="diff-file">${esc(d.file || 'diff')}</span> <span class="diff-summary-stats">${stat}</span></summary><pre class="diff-pre">${rows}</pre></details>`;
             }
