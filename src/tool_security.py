@@ -17,6 +17,9 @@ NON_ADMIN_BLOCKED_TOOLS = {
     "read_file",
     "write_file",
     "edit_file",
+    "grep",
+    "glob",
+    "ls",
     "search_chats",
     "manage_memory",
     "manage_skills",
@@ -60,6 +63,9 @@ NON_ADMIN_BLOCKED_TOOLS = {
 # hard-blocked below.
 PLAN_MODE_READONLY_TOOLS = {
     "read_file",
+    "grep",
+    "glob",
+    "ls",
     "web_search",
     "web_fetch",
     "search_chats",

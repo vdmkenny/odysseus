@@ -320,6 +320,36 @@ def get_mcp_manager():
     return agent_tools.get_mcp_manager()
 
 
+# Directories ignored by the code-nav tools' Python fallbacks so results aren't
+# polluted by VCS internals / dependency trees / build caches. ripgrep already
+# honours .gitignore; this is the parity floor for the no-rg path.
+_CODENAV_SKIP_DIRS = frozenset({
+    ".git", ".hg", ".svn", "node_modules", "venv", ".venv", "__pycache__",
+    ".mypy_cache", ".pytest_cache", ".ruff_cache", "dist", "build",
+    ".next", ".cache", "site-packages", ".idea", ".tox",
+})
+# Per-tool result caps (keep tool output cheap + model-friendly).
+_CODENAV_MAX_HITS = 200
+_CODENAV_MAX_LINE = 400
+
+
+def _resolve_search_root(workspace: Optional[str], raw_path: str) -> str:
+    """Resolve + confine a code-nav path (grep/glob/ls).
+
+    Empty path → the active root: the workspace if set, else the project data
+    dir (first allowlisted root). A supplied path is confined by the same
+    policy as read_file (workspace when set, else the default allowlist).
+    """
+    raw = (raw_path or "").strip()
+    if not raw:
+        if workspace:
+            return os.path.realpath(workspace)
+        roots = _tool_path_roots()
+        return roots[0] if roots else os.path.realpath(".")
+    return (_resolve_tool_path_in_workspace(workspace, raw)
+            if workspace else _resolve_tool_path(raw))
+
+
 def _truncate(text: str, limit: int = MAX_OUTPUT_CHARS) -> str:
     if len(text) > limit:
         return text[:limit] + f"\n... (truncated, {len(text)} chars total)"
@@ -650,15 +680,44 @@ async def _direct_fallback(
             return {"output": output or "(no output)", "exit_code": rc or 0}
 
         if tool == "read_file":
-            raw_path = content.split("\n", 1)[0].strip()
+            # Args: plain path on line 1 (back-compat) OR JSON
+            # {path, offset?, limit?} where offset/limit are 1-based line range.
+            raw_path, offset, limit = content.split("\n", 1)[0].strip(), 0, 0
+            _stripped = content.strip()
+            if _stripped.startswith("{"):
+                try:
+                    _a = json.loads(_stripped)
+                    raw_path = str(_a.get("path", "")).strip()
+                    offset = int(_a.get("offset") or 0)
+                    limit = int(_a.get("limit") or 0)
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    pass
             try:
                 path = (_resolve_tool_path_in_workspace(workspace, raw_path)
                         if workspace else _resolve_tool_path(raw_path))
             except ValueError as e:
                 return {"error": f"read_file: {e}", "exit_code": 1}
             try:
-                # Run blocking read in a thread to keep the loop responsive
+                # Run blocking read in a thread to keep the loop responsive.
                 def _read():
+                    if offset > 0 or limit > 0:
+                        # Line-range read: stream lines, slice [offset, offset+limit).
+                        start = max(offset, 1)
+                        out, n = [], 0
+                        budget = MAX_READ_CHARS
+                        with open(path, "r", encoding="utf-8", errors="replace") as f:
+                            for i, line in enumerate(f, 1):
+                                if i < start:
+                                    continue
+                                if limit > 0 and n >= limit:
+                                    break
+                                out.append(line)
+                                n += 1
+                                budget -= len(line)
+                                if budget <= 0:
+                                    out.append(f"\n... [truncated at {MAX_READ_CHARS} chars]")
+                                    break
+                        return "".join(out)
                     with open(path, "r", encoding="utf-8", errors="replace") as f:
                         return f.read(MAX_READ_CHARS + 1)
                 data = await asyncio.to_thread(_read)
@@ -666,10 +725,11 @@ async def _direct_fallback(
                 return {"error": f"read_file: {path}: not found", "exit_code": 1}
             except PermissionError:
                 return {"error": f"read_file: {path}: permission denied", "exit_code": 1}
+            except IsADirectoryError:
+                return {"error": f"read_file: {path}: is a directory (use ls)", "exit_code": 1}
             except OSError as e:
                 return {"error": f"read_file: {path}: {e}", "exit_code": 1}
-            truncated = len(data) > MAX_READ_CHARS
-            if truncated:
+            if not (offset > 0 or limit > 0) and len(data) > MAX_READ_CHARS:
                 data = data[:MAX_READ_CHARS] + f"\n... [truncated at {MAX_READ_CHARS} chars]"
             return {"output": data, "exit_code": 0}
 
@@ -709,6 +769,197 @@ async def _direct_fallback(
             if diff:
                 result["diff"] = diff
             return result
+
+        if tool == "grep":
+            # Args (JSON): {pattern, path?, glob?, ignore_case?, max_results?}.
+            # Bare string → treated as the pattern.
+            args: Dict[str, Any] = {}
+            _s = (content or "").strip()
+            if _s.startswith("{"):
+                try:
+                    args = json.loads(_s)
+                except json.JSONDecodeError:
+                    args = {}
+            else:
+                args = {"pattern": _s}
+            pattern = str(args.get("pattern", "")).strip()
+            if not pattern:
+                return {"error": "grep: pattern is required", "exit_code": 1}
+            ignore_case = bool(args.get("ignore_case"))
+            glob_pat = str(args.get("glob", "") or "").strip()
+            try:
+                max_hits = int(args.get("max_results") or _CODENAV_MAX_HITS)
+            except (TypeError, ValueError):
+                max_hits = _CODENAV_MAX_HITS
+            max_hits = max(1, min(max_hits, _CODENAV_MAX_HITS))
+            try:
+                root = _resolve_search_root(workspace, str(args.get("path", "")))
+            except ValueError as e:
+                return {"error": f"grep: {e}", "exit_code": 1}
+
+            def _grep():
+                import re as _re
+                import shutil
+                rg = shutil.which("rg")
+                if rg:
+                    cmd = [rg, "--line-number", "--no-heading", "--color=never",
+                           "--max-count", str(max_hits)]
+                    if ignore_case:
+                        cmd.append("--ignore-case")
+                    if glob_pat:
+                        cmd += ["--glob", glob_pat]
+                    # Exclude junk dirs even when the tree has no .gitignore, so
+                    # results match the Python fallback's skip set.
+                    for _d in _CODENAV_SKIP_DIRS:
+                        cmd += ["--glob", f"!**/{_d}/**"]
+                    cmd += ["--regexp", pattern, root]
+                    try:
+                        import subprocess
+                        p = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+                        lines = [ln for ln in (p.stdout or "").splitlines() if ln][:max_hits]
+                        return lines, None
+                    except subprocess.TimeoutExpired:
+                        return None, "grep: timed out"
+                    except Exception as _e:
+                        return None, f"grep: {_e}"
+                # Python fallback (no ripgrep): walk + regex.
+                try:
+                    rx = _re.compile(pattern, _re.IGNORECASE if ignore_case else 0)
+                except _re.error as _e:
+                    return None, f"grep: bad pattern: {_e}"
+                import fnmatch
+                hits, base = [], root
+                walk_root = root if os.path.isdir(root) else os.path.dirname(root)
+                file_iter = ([root] if os.path.isfile(root) else None)
+                if file_iter is None:
+                    file_iter = []
+                    for dp, dns, fns in os.walk(walk_root):
+                        dns[:] = [d for d in dns if d not in _CODENAV_SKIP_DIRS]
+                        for fn in fns:
+                            if glob_pat and not fnmatch.fnmatch(fn, glob_pat):
+                                continue
+                            file_iter.append(os.path.join(dp, fn))
+                for fp in file_iter:
+                    if len(hits) >= max_hits:
+                        break
+                    try:
+                        with open(fp, "r", encoding="utf-8", errors="strict") as f:
+                            for i, line in enumerate(f, 1):
+                                if rx.search(line):
+                                    hits.append(f"{fp}:{i}:{line.rstrip()[:_CODENAV_MAX_LINE]}")
+                                    if len(hits) >= max_hits:
+                                        break
+                    except (UnicodeDecodeError, OSError):
+                        continue  # skip binary / unreadable
+                return hits, None
+
+            lines, err = await asyncio.to_thread(_grep)
+            if err:
+                return {"error": err, "exit_code": 1}
+            if not lines:
+                return {"output": f"No matches for {pattern!r} under {root}", "exit_code": 0}
+            out = "\n".join(ln[:_CODENAV_MAX_LINE] for ln in lines)
+            if len(lines) >= max_hits:
+                out += f"\n... [capped at {max_hits} matches]"
+            return {"output": _truncate(out), "exit_code": 0}
+
+        if tool == "glob":
+            args = {}
+            _s = (content or "").strip()
+            if _s.startswith("{"):
+                try:
+                    args = json.loads(_s)
+                except json.JSONDecodeError:
+                    args = {}
+            else:
+                args = {"pattern": _s}
+            pattern = str(args.get("pattern", "")).strip()
+            if not pattern:
+                return {"error": "glob: pattern is required", "exit_code": 1}
+            try:
+                root = _resolve_search_root(workspace, str(args.get("path", "")))
+            except ValueError as e:
+                return {"error": f"glob: {e}", "exit_code": 1}
+
+            def _glob():
+                from pathlib import Path
+                base = Path(root)
+                if not base.is_dir():
+                    return None, f"glob: {root}: not a directory"
+                matched = []
+                try:
+                    for p in base.rglob(pattern):
+                        parts = set(p.relative_to(base).parts)
+                        if parts & _CODENAV_SKIP_DIRS:
+                            continue
+                        try:
+                            mtime = p.stat().st_mtime
+                        except OSError:
+                            mtime = 0
+                        matched.append((mtime, str(p)))
+                        if len(matched) > _CODENAV_MAX_HITS * 5:
+                            break
+                except (OSError, ValueError) as _e:
+                    return None, f"glob: {_e}"
+                matched.sort(key=lambda t: t[0], reverse=True)  # newest first
+                return [pth for _, pth in matched[:_CODENAV_MAX_HITS]], None
+
+            paths, err = await asyncio.to_thread(_glob)
+            if err:
+                return {"error": err, "exit_code": 1}
+            if not paths:
+                return {"output": f"No files matching {pattern!r} under {root}", "exit_code": 0}
+            out = "\n".join(paths)
+            if len(paths) >= _CODENAV_MAX_HITS:
+                out += f"\n... [capped at {_CODENAV_MAX_HITS} files]"
+            return {"output": _truncate(out), "exit_code": 0}
+
+        if tool == "ls":
+            raw_path = ""
+            _s = (content or "").strip()
+            if _s.startswith("{"):
+                try:
+                    raw_path = str(json.loads(_s).get("path", "")).strip()
+                except json.JSONDecodeError:
+                    raw_path = ""
+            else:
+                raw_path = _s.split("\n", 1)[0].strip()
+            try:
+                root = _resolve_search_root(workspace, raw_path)
+            except ValueError as e:
+                return {"error": f"ls: {e}", "exit_code": 1}
+
+            def _ls():
+                if not os.path.isdir(root):
+                    return None, f"ls: {root}: not a directory"
+                rows = []
+                try:
+                    with os.scandir(root) as it:
+                        for entry in it:
+                            if entry.name.startswith("."):
+                                continue
+                            try:
+                                is_dir = entry.is_dir(follow_symlinks=False)
+                                size = entry.stat(follow_symlinks=False).st_size if not is_dir else 0
+                            except OSError:
+                                continue
+                            rows.append((is_dir, entry.name, size))
+                except (PermissionError, OSError) as _e:
+                    return None, f"ls: {_e}"
+                rows.sort(key=lambda r: (not r[0], r[1].lower()))  # dirs first, then name
+                lines = [f"{root}:"]
+                for is_dir, name, size in rows[:_CODENAV_MAX_HITS]:
+                    lines.append(f"  {name}/" if is_dir else f"  {name}  ({size} B)")
+                if len(rows) > _CODENAV_MAX_HITS:
+                    lines.append(f"  ... [{len(rows) - _CODENAV_MAX_HITS} more]")
+                if not rows:
+                    lines.append("  (empty)")
+                return "\n".join(lines), None
+
+            out, err = await asyncio.to_thread(_ls)
+            if err:
+                return {"error": err, "exit_code": 1}
+            return {"output": _truncate(out), "exit_code": 0}
 
         if tool == "web_search":
             from src.search import comprehensive_web_search
@@ -949,6 +1200,12 @@ async def execute_tool_block(
         first_line = content.split(chr(10))[0][:80]
         desc = f"{tool}: {first_line}"
         result = await _call_mcp_tool(tool, content, progress_cb=progress_cb, workspace=workspace)
+    elif tool in ("grep", "glob", "ls"):
+        # Code-navigation tools — no MCP server; run the direct implementation.
+        first_line = content.split(chr(10))[0][:80]
+        desc = f"{tool}: {first_line}"
+        result = await _direct_fallback(tool, content, progress_cb=progress_cb, workspace=workspace) \
+            or {"error": f"{tool}: execution failed", "exit_code": 1}
     elif tool == "create_document":
         title = content.split("\n")[0].strip()[:60]
         desc = f"create_document: {title}"
