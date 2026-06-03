@@ -35815,6 +35815,7 @@ body.theme-frosted .modal {
   .doc-email-richbody.doc-font-m { font-size: 16px !important; }
 }
 
+<<<<<<< HEAD
 /* GitHub Copilot device-flow connect block (model endpoints → API) */
 .adm-copilot-connect {
   margin-top: 10px;
@@ -35920,3 +35921,89 @@ body.theme-frosted .modal {
   padding: 10px 18px;
   border-top: 1px solid var(--border);
 }
+=======
+/* ── ask_user: multiple-choice question card ─────────────────────────────
+   The agent posed a question and ended its turn. The user clicks an option,
+   types a free-text "Other" answer, or dismisses (×) to just type in the
+   composer. Reuses theme vars (and .modal-close for the ×) so it reads as
+   part of the conversation, not a modal. */
+.ask-user-card {
+  /* Left-align like an assistant message (.msg-ai), not centered. */
+  align-self: flex-start;
+  margin: 10px auto 10px 8px;
+  width: 85%;
+  max-width: 680px;
+  padding: 12px 16px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--fg) 4%, var(--panel));
+}
+.ask-user-head {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+.ask-user-close { font-size: 15px; }
+.ask-user-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ask-user-option {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--fg);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.ask-user-option:hover:not(:disabled) {
+  border-color: var(--accent, var(--red));
+  background: color-mix(in srgb, var(--accent, var(--red)) 10%, var(--panel));
+}
+.ask-user-option:disabled { cursor: default; }
+.ask-user-option-label { font-weight: 500; }
+.ask-user-option-desc { opacity: 0.65; font-size: 12px; }
+/* Free-text "Other" row: input + send, on one line. */
+.ask-user-other {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.ask-user-other-input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--fg);
+  font-size: 13px;
+}
+.ask-user-other-input:focus {
+  outline: none;
+  border-color: var(--accent, var(--red));
+}
+.ask-user-submit {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent, var(--red));
+  color: var(--bg);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.ask-user-submit:hover:not(:disabled) { opacity: 0.88; }
+.ask-user-submit:disabled { opacity: 0.5; cursor: default; }
+>>>>>>> 241e899 (Add ask_user tool: agent-posed multiple-choice questions)
