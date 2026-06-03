@@ -6,7 +6,7 @@ depend on each other. Upstream = `pewdiepie-archdaemon/odysseus`.
 This `main` branch is the fork's running build: latest upstream `main` + all the
 open-PR branches + fork-only items, combined.
 
-_Last updated: 2026-06-03 (dead-code cleanup PRs #2214, #2218)._
+_Last updated: 2026-06-03 (dead-code cleanup PRs #2214, #2218, #2221)._
 
 ## Legend
 - **Open PR** — proposed upstream, awaiting review/merge.
@@ -31,6 +31,7 @@ _Last updated: 2026-06-03 (dead-code cleanup PRs #2214, #2218)._
 | Provider line in the model-info card | `feat/provider-label` | [#2185](https://github.com/pewdiepie-archdaemon/odysseus/pull/2185) | Open | issue [#2184](https://github.com/pewdiepie-archdaemon/odysseus/issues/2184) | Model-info popup gains a **Provider** line from the session endpoint host (GitHub Copilot / OpenRouter / Anthropic / Local / …), distinguishing the same model name served by different routes. `providerLabel()` in `providers.js`. Independent (clean off upstream `main`). **Screenshot still to be dragged into the PR.** |
 | Cleanup: drop unused `UPLOAD_DIR` imports | `chore/rm-unused-upload-dir-import` | [#2214](https://github.com/pewdiepie-archdaemon/odysseus/pull/2214) | Open | issue [#2213](https://github.com/pewdiepie-archdaemon/odysseus/issues/2213) | Pure upstream dead-code removal — 8 unused `from src.constants import UPLOAD_DIR` lines in `routes/document_routes.py`. One file, no behaviour change. Not a fork delta (not carried in the build). Small/focused — the rest of the unused-import findings deliberately left out. |
 | Cleanup: drop unused `uuid` import | `chore/rm-unused-uuid-import` | [#2218](https://github.com/pewdiepie-archdaemon/odysseus/pull/2218) | Open | issue [#2217](https://github.com/pewdiepie-archdaemon/odysseus/issues/2217) | Pure dead-code removal — unused `import uuid` in `app.py`. One line, no behaviour change. Sibling of #2214. |
+| Cleanup: drop unused imports (calendar) | `chore/rm-unused-imports-calendar` | [#2221](https://github.com/pewdiepie-archdaemon/odysseus/pull/2221) | Open | issue [#2220](https://github.com/pewdiepie-archdaemon/odysseus/issues/2220) | Pure dead-code removal — unused `Tuple`, `dateutil.rrule.{rruleset,DAILY,WEEKLY,MONTHLY,YEARLY}`, `get_current_user` in `routes/calendar_routes.py`. One file, no behaviour change. Sibling of #2214/#2218. |
 
 All rebased on fresh upstream `main` and use the upstream PR template.
 
