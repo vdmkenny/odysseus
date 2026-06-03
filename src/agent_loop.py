@@ -1684,6 +1684,16 @@ async def stream_agent_loop(
         else:
             messages.insert(0, {"role": "system", "content": _ws_note})
         logger.info("[workspace] active for this turn: %s", workspace)
+    else:
+        # No workspace → still honour an AGENTS.md / CLAUDE.md sitting in the
+        # default data dir the file tools fall back to.
+        from src.constants import DATA_DIR
+        _proj = _load_project_instructions(DATA_DIR)
+        if _proj:
+            if messages and messages[0].get("role") == "system":
+                messages[0]["content"] = _proj + "\n\n" + (messages[0].get("content") or "")
+            else:
+                messages.insert(0, {"role": "system", "content": _proj})
     if plan_mode:
         # Investigate-then-propose. Must DOMINATE (topmost), incl. over the
         # workspace note, so the model proposes a checklist instead of acting.
