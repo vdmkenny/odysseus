@@ -1,5 +1,6 @@
 """Tests for the git + forge tools."""
 import os
+import shutil
 import asyncio
 import subprocess
 import pytest
@@ -7,6 +8,7 @@ import pytest
 os.environ.setdefault("DATABASE_URL", "sqlite:////tmp/test_git_tools.db")
 
 from src.tool_execution import _direct_fallback
+from src.agent_loop import _workspace_git_context
 
 
 def _run(tool, content, workspace=None):
@@ -84,3 +86,47 @@ def test_forge_blocked_subcommand(repo):
     # 'auth' is not in the allowlist → rejected before any CLI runs.
     r = _run("forge", "auth status", workspace=repo)
     assert r["exit_code"] == 1 and "not allowed" in r["error"]
+
+
+# ── workspace git/forge context (system-prompt note) ────────────────────────
+
+def test_gitctx_non_repo(tmp_path):
+    assert _workspace_git_context(str(tmp_path)) == ""
+    assert _workspace_git_context("") == ""
+    assert _workspace_git_context("/no/such/dir") == ""
+
+
+def test_gitctx_repo_no_remote(repo):
+    out = _workspace_git_context(repo)
+    assert "## GIT" in out
+    assert "git repo" in out
+    assert "No GitHub/GitLab remote" in out
+
+
+def test_gitctx_github_remote(repo):
+    subprocess.run(["git", "-C", repo, "remote", "add", "origin",
+                    "https://github.com/foo/bar.git"], check=True)
+    out = _workspace_git_context(repo)
+    assert "GitHub" in out
+    # forge guidance depends on whether gh is installed on the host
+    if shutil.which("gh"):
+        assert "forge" in out and "gh" in out
+    else:
+        assert "isn't installed" in out
+
+
+def test_gitctx_gitlab_remote(repo):
+    subprocess.run(["git", "-C", repo, "remote", "add", "origin",
+                    "https://gitlab.com/foo/bar.git"], check=True)
+    out = _workspace_git_context(repo)
+    assert "GitLab" in out
+    if not shutil.which("glab"):
+        assert "isn't installed" in out
+
+
+def test_gitctx_unborn_branch_repo(tmp_path):
+    # Fresh repo, no commits — should still be detected as a repo.
+    d = str(tmp_path)
+    subprocess.run(["git", "-C", d, "init", "-q"], check=True)
+    out = _workspace_git_context(d)
+    assert "## GIT" in out and "git repo" in out
