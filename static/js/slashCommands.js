@@ -17,6 +17,7 @@ import chatRenderer from './chatRenderer.js';
 import spinnerModule from './spinner.js';
 import themeModule from './theme.js';
 import documentModule from './document.js';
+import workspaceModule from './workspace.js';
 import settingsModule from './settings.js';
 import cookbookModule from './cookbook.js';
 import { EVAL_PROMPTS } from './compare/index.js';
@@ -1138,6 +1139,52 @@ async function _cmdToggleDoc(args, ctx) {
       slashReply('Document editor: opened');
     }
   } else { slashReply('Document module not available'); }
+  return true;
+}
+
+// Plan mode: drive the real toggle pill (#plan-toggle-btn) so its per-mode
+// persistence/UI logic runs. Only meaningful in agent mode.
+async function _cmdTogglePlan(args, ctx) {
+  const btn = document.getElementById('plan-toggle-btn');
+  const chk = document.getElementById('plan-toggle');
+  if (!btn || btn.style.display === 'none' || btn.offsetParent === null) {
+    slashReply('Plan mode is only available in agent mode — switch to Agent first.');
+    return true;
+  }
+  const cur = !!(chk && chk.checked);
+  const v = (args[0] || '').toLowerCase();
+  const target = v === 'on' ? true : v === 'off' ? false : !cur;
+  if (target !== cur) btn.click();
+  slashReply(`Plan mode: ${target ? 'on' : 'off'}`);
+  return true;
+}
+
+// Workspace: confine the agent's file/shell tools to a folder. Not a boolean —
+// show / set <path> / clear / pick (open the directory browser).
+async function _cmdWorkspace(args, ctx) {
+  const sub = (args[0] || '').toLowerCase();
+  const rest = args.slice(1).join(' ').trim();
+  const cur = workspaceModule.getWorkspace();
+  if (!sub || sub === 'show' || sub === 'status' || sub === 'info') {
+    slashReply(cur ? `Workspace: <code>${uiModule.esc(cur)}</code>` : 'No workspace set. <code>/workspace pick</code> or <code>/workspace set /path</code>.');
+    return true;
+  }
+  if (sub === 'set' || sub === 'cd' || sub === 'use') {
+    if (!rest) { slashReply('Usage: <code>/workspace set /absolute/path</code>'); return true; }
+    workspaceModule.setWorkspace(rest);
+    slashReply(`Workspace set: <code>${uiModule.esc(rest)}</code>`);
+    return true;
+  }
+  if (sub === 'clear' || sub === 'off' || sub === 'none' || sub === 'unset') {
+    workspaceModule.clearWorkspace();
+    slashReply('Workspace cleared.');
+    return true;
+  }
+  if (sub === 'pick' || sub === 'browse' || sub === 'open') {
+    workspaceModule.openWorkspaceBrowser();
+    return true;
+  }
+  slashReply('Usage: <code>/workspace</code> · <code>set /path</code> · <code>clear</code> · <code>pick</code>');
   return true;
 }
 
@@ -4735,11 +4782,47 @@ function _clearSetupCommandInput() {
   }
 }
 
+// GitHub Copilot device-flow sign-in, driven from chat (mirrors the Settings
+// "Connect GitHub Copilot" button). Replies via the setup guide messages.
+async function _setupCopilot() {
+  _clearSetupGuideMessages();
+  await _setupReply('Starting GitHub Copilot sign-in…');
+  let start;
+  try {
+    const r = await fetch(`${API_BASE}/api/copilot/device/start`, { method: 'POST', body: new FormData(), credentials: 'same-origin' });
+    start = await r.json();
+    if (!r.ok) { await _setupReply(start.detail || 'Failed to start Copilot sign-in.'); return; }
+  } catch (e) { await _setupReply('Request failed.'); return; }
+  const authUrl = start.verification_uri_complete || start.verification_uri || '';
+  await _setupReply(`Opening GitHub — approve the request (code ${start.user_code}). Waiting…`);
+  try { if (authUrl) window.open(authUrl, '_blank', 'noopener'); } catch (e) {}
+  const deadline = Date.now() + (start.expires_in || 900) * 1000;
+  const stepMs = Math.max((start.interval || 5), 2) * 1000;
+  const poll = async () => {
+    if (Date.now() > deadline) { await _setupReply('Copilot sign-in expired — run /setup copilot again.'); return; }
+    try {
+      const fd = new FormData(); fd.append('poll_id', start.poll_id);
+      const r = await fetch(`${API_BASE}/api/copilot/device/poll`, { method: 'POST', body: fd, credentials: 'same-origin' });
+      const d = await r.json();
+      if (d.status === 'authorized') {
+        const n = ((d.endpoint && d.endpoint.models) || []).length;
+        await _setupReply(`Connected — ${n} Copilot model${n !== 1 ? 's' : ''} available.`);
+        if (modelsModule) modelsModule.refreshModels(true);
+        return;
+      }
+      if (d.status === 'failed') { await _setupReply('Copilot sign-in failed (' + (d.error || 'denied') + ').'); return; }
+    } catch (e) { /* transient — keep polling */ }
+    setTimeout(poll, stepMs);
+  };
+  setTimeout(poll, stepMs);
+}
+
 async function _cmdSetup(args, ctx) {
   _hideWelcomeScreen();
   _clearSetupCommandInput();
   const topic = (args[0] || '').trim().toLowerCase();
   const topicArgs = args.slice(1);
+  if (topic === 'copilot' || topic === 'github') { await _setupCopilot(); return true; }
   const provider = _setupProviderFromInput(topic);
   if (provider) {
     _clearSetupGuideMessages();
@@ -5415,9 +5498,25 @@ const COMMANDS = {
       'bash':      { handler: _cmdToggleBash,      alias: ['b','shell'],       help: 'Toggle bash/shell',       usage: '/toggle bash' },
       'research':  { handler: _cmdToggleResearch,  alias: ['r'],               help: 'Toggle deep research',    usage: '/toggle research' },
       'doc':       { handler: _cmdToggleDoc,       alias: [],     help: 'Toggle document editor',  usage: '/toggle doc' },
+      'plan':      { handler: _cmdTogglePlan,      alias: ['p'],  help: 'Toggle plan mode (agent)', usage: '/toggle plan' },
       'sidebar':   { handler: _cmdToggleSidebar,   alias: ['sb'], help: 'Cycle sidebar (full/mini/off)', usage: '/toggle sidebar [1|2|3]' },
       '_show':     { handler: _cmdToggleShow,      alias: [],     help: 'Show all toggle states',  usage: '/toggle' }
     }
+  },
+  plan: {
+    alias: [],
+    category: 'Quick toggles',
+    help: 'Toggle plan mode (agent)',
+    handler: _cmdTogglePlan,
+    usage: '/plan [on|off]',
+  },
+  workspace: {
+    alias: ['ws'],
+    category: 'Agent',
+    help: 'Set the folder the agent works in',
+    handler: _cmdWorkspace,
+    noUserBubble: true,
+    usage: '/workspace [set <path> | clear | pick]',
   },
   memory: {
     alias: ['m'],
@@ -5464,7 +5563,7 @@ const COMMANDS = {
     category: 'Getting started',
     help: 'Add local or API model endpoints',
     handler: _cmdSetup,
-    usage: '/setup local URL  ·  /setup groq KEY  ·  /setup endpoint'
+    usage: '/setup local URL  ·  /setup groq KEY  ·  /setup copilot  ·  /setup endpoint'
   },
   demo: {
     alias: ['tour'],
