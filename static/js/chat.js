@@ -1839,12 +1839,13 @@ import createResearchSynapse from './researchSynapse.js';
                   const note = document.createElement('div');
                   note.className = 'stopped-indicator rounds-exhausted';
                   const label = document.createElement('span');
-                  label.textContent = `[Reached the ${json.rounds || ''}-step limit — not finished]`;
+                  label.className = 'rounds-exhausted-label';
+                  label.textContent = `Reached the ${json.rounds || ''}-step limit — not finished.`;
                   note.appendChild(label);
                   const contBtn = document.createElement('button');
                   contBtn.className = 'continue-btn';
-                  contBtn.title = 'Continue';
-                  contBtn.textContent = '▸';
+                  contBtn.title = 'Continue the task';
+                  contBtn.textContent = 'Continue ▸';
                   const _holder = currentHolder;
                   contBtn.addEventListener('click', () => {
                     note.remove();
