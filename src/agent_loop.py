@@ -2501,12 +2501,14 @@ async def stream_agent_loop(
 
         # Separator in accumulated response
         full_response += "\n\n"
-
-        # Reaching here means this round executed tools and fed results back —
-        # the agent wanted to keep going. If that was the last allowed round,
-        # the loop is about to exit mid-task: flag it so we can offer Continue.
-        if round_num >= max_rounds:
-            _exhausted_rounds = True
+    else:
+        # The for-loop completed every allowed round WITHOUT an early `break`
+        # (a `break` fires on "done", budget, or error). Reaching this `else`
+        # means the agent kept working until it ran out of rounds — so offer
+        # Continue instead of stopping silently. This catches ALL exhaustion
+        # paths, including a verifier `continue` on the final round (the old
+        # bottom-of-loop flag missed those).
+        _exhausted_rounds = True
 
     # If the loop hit the round cap while still working, tell the client so it
     # can show a "Continue" affordance instead of the turn just stopping.
