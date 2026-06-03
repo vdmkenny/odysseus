@@ -1416,6 +1416,51 @@ PLAN_MODE_DIRECTIVE = (
 )
 
 
+# Project-instructions files checked at the workspace root, in priority order.
+# AGENTS.md is the cross-tool standard (agents.md); CLAUDE.md is the common
+# Claude Code equivalent. First match wins.
+PROJECT_INSTRUCTION_FILES = ("AGENTS.md", "CLAUDE.md")
+_PROJECT_INSTRUCTIONS_MAX = 32 * 1024  # cap so a big file can't blow the prompt
+
+
+def _load_project_instructions(workspace: str) -> str:
+    """Return a system-prompt block from the workspace's AGENTS.md / CLAUDE.md,
+    or "" if none. Read from the workspace ROOT only (don't climb to a parent
+    repo). Best-effort: any error → "".
+    """
+    import os
+    if not workspace:
+        return ""
+    try:
+        base = os.path.realpath(workspace)
+        if not os.path.isdir(base):
+            return ""
+    except OSError:
+        return ""
+    for name in PROJECT_INSTRUCTION_FILES:
+        fp = os.path.join(base, name)
+        try:
+            if not os.path.isfile(fp):
+                continue
+            with open(fp, "r", encoding="utf-8", errors="replace") as f:
+                text = f.read(_PROJECT_INSTRUCTIONS_MAX + 1)
+        except OSError:
+            continue
+        text = (text or "").strip()
+        if not text:
+            continue
+        if len(text) > _PROJECT_INSTRUCTIONS_MAX:
+            text = text[:_PROJECT_INSTRUCTIONS_MAX] + "\n… [truncated]"
+        logger.info("[workspace] loaded project instructions from %s", name)
+        return (
+            f"## PROJECT INSTRUCTIONS (from {name})\n"
+            f"The project author left these instructions for working in this "
+            f"repo. Follow them unless they conflict with a direct user request "
+            f"or a safety rule.\n\n{text}"
+        )
+    return ""
+
+
 async def stream_agent_loop(
     endpoint_url: str,
     model: str,
@@ -1630,6 +1675,10 @@ async def stream_agent_loop(
             f"`ls -R`), then read_file by path RELATIVE to the workspace. To change a "
             f"file use edit_file (or write_file); never edit_document or a bash heredoc."
         )
+        # Repo-authored instructions (AGENTS.md / CLAUDE.md) at the workspace root.
+        _proj = _load_project_instructions(workspace)
+        if _proj:
+            _ws_note = _ws_note + "\n\n" + _proj
         if messages and messages[0].get("role") == "system":
             messages[0]["content"] = _ws_note + "\n\n" + (messages[0].get("content") or "")
         else:
