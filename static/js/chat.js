@@ -1831,7 +1831,11 @@ import createResearchSynapse from './researchSynapse.js';
                 // message body — the body innerHTML is re-rendered at stream
                 // finalize, which would wipe a note placed inside it.
                 const _chatBox = document.getElementById('chat-history');
-                if (!_isBg && _chatBox && !_chatBox.querySelector('.rounds-exhausted')) {
+                if (!_isBg && _chatBox) {
+                  // Drop any prior box so repeated cap-hits each get a fresh
+                  // Continue at the bottom (multiple continues in a row).
+                  const _old = _chatBox.querySelector('.rounds-exhausted');
+                  if (_old) _old.remove();
                   const note = document.createElement('div');
                   note.className = 'stopped-indicator rounds-exhausted';
                   const label = document.createElement('span');
