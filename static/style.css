@@ -36314,3 +36314,14 @@ body.theme-frosted .modal {
    the input beside it (.confirm-btn won't stretch on its own). */
 .ask-user-other-send { flex-shrink: 0; white-space: nowrap; min-height: 39px; }
 .ask-user-other-send:disabled { opacity: 0.5; cursor: default; }
+
+/* Git branch indicator — read-only chip beside the workspace pill. Mirrors the
+   tool-indicator look but is informational (no click/clear). */
+.git-branch-indicator {
+  cursor: default;
+  display: inline-flex;
+  align-items: center;
+  opacity: 0.75;
+}
+.git-branch-indicator:hover { opacity: 1; background: none; }
+.git-branch-indicator svg { flex-shrink: 0; }

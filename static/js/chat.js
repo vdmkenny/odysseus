@@ -3076,6 +3076,9 @@ import createResearchSynapse from './researchSynapse.js';
       // Streaming done — let screen readers announce the settled response.
       const _chatLogDone = document.getElementById('chat-history');
       if (_chatLogDone) _chatLogDone.setAttribute('aria-busy', 'false');
+      // Refresh the git-branch indicator — the agent may have switched branches
+      // via the shell during this turn. (workspace.js listens.)
+      try { document.dispatchEvent(new CustomEvent('git-branch-refresh')); } catch (_) {}
       // Always clean up research tracking regardless of background state
       _researchingStreamIds.delete(streamSessionId);
       if (_researchingStreamIds.size === 0) {

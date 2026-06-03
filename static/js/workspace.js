@@ -45,6 +45,32 @@ export function setWorkspace(path) {
   if (path) Storage.set(KEYS.WORKSPACE, path);
   else Storage.remove(KEYS.WORKSPACE);
   syncWorkspaceIndicator(path || '');
+  refreshGitBranch();
+}
+
+// Git-branch indicator: show the checked-out branch of the active workspace
+// (or, with no workspace, the project data dir). Best-effort — silently hidden
+// when the dir isn't a git repo or git isn't installed on the server.
+export async function refreshGitBranch() {
+  const chip = document.getElementById('git-branch-indicator');
+  const name = document.getElementById('git-branch-indicator-name');
+  if (!chip || !name) return;
+  const ws = getWorkspace();
+  try {
+    const url = `${API_BASE}/api/workspace/git-branch${ws ? `?path=${encodeURIComponent(ws)}` : ''}`;
+    const res = await fetch(url, { credentials: 'same-origin' });
+    if (!res.ok) { chip.style.display = 'none'; return; }
+    const data = await res.json();
+    if (data && data.repo && data.branch) {
+      name.textContent = data.branch;
+      chip.title = `Git branch: ${data.branch}${data.detached ? ' (detached)' : ''}`;
+      chip.style.display = '';
+    } else {
+      chip.style.display = 'none';
+    }
+  } catch (_) {
+    chip.style.display = 'none';
+  }
 }
 
 export function clearWorkspace() {
@@ -155,6 +181,10 @@ export function initWorkspace() {
   if (overflow) overflow.addEventListener('click', openWorkspaceBrowser);
   const pill = document.getElementById('workspace-indicator-btn');
   if (pill) pill.addEventListener('click', clearWorkspace);
+  // Show the current git branch on load, and refresh it after each LLM turn
+  // (the agent may have checked out a different branch via the shell).
+  refreshGitBranch();
+  document.addEventListener('git-branch-refresh', refreshGitBranch);
 }
 
-export default { initWorkspace, openWorkspaceBrowser, getWorkspace, setWorkspace, clearWorkspace, syncWorkspaceIndicator };
+export default { initWorkspace, openWorkspaceBrowser, getWorkspace, setWorkspace, clearWorkspace, syncWorkspaceIndicator, refreshGitBranch };
