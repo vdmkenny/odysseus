@@ -20,6 +20,8 @@ NON_ADMIN_BLOCKED_TOOLS = {
     "grep",
     "glob",
     "ls",
+    "git",
+    "forge",
     "search_chats",
     "manage_memory",
     "manage_skills",

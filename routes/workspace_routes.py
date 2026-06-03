@@ -1,6 +1,8 @@
 """Workspace API — browse server directories to pick a tool workspace folder."""
 import os
-from fastapi import APIRouter, Request, HTTPException, Query
+import shutil
+import subprocess
+from fastapi import APIRouter, Request, HTTPException, Query, Form
 
 from src.auth_helpers import get_current_user
 from src.tool_security import owner_is_admin_or_single_user
@@ -52,5 +54,23 @@ def setup_workspace_routes():
             "parent": parent if parent and parent != target else None,
             "dirs": sorted(dirs, key=lambda d: d["name"].lower()),
         }
+
+    @router.post("/git")
+    async def git_exec(request: Request, command: str = Form(...), path: str = Form("")):
+        """Run a git command in the workspace from the chat input (`/git`).
+
+        Reuses the agent `git` tool's implementation — same subcommand allowlist,
+        confinement, and injected commit identity — so it's a thin, no-LLM git
+        client scoped to the chosen repo. Admin-only (it runs git on the host).
+        """
+        owner = get_current_user(request)
+        if not owner_is_admin_or_single_user(owner):
+            raise HTTPException(status_code=403, detail="git is admin-only")
+        ws = os.path.realpath(os.path.expanduser((path or "").strip()))
+        if not path.strip() or not os.path.isdir(ws):
+            raise HTTPException(status_code=400, detail="A valid workspace folder is required")
+        from src.tool_execution import _direct_fallback
+        result = await _direct_fallback("git", command, workspace=ws)
+        return result or {"error": "git: execution failed", "exit_code": 1}
 
     return router
