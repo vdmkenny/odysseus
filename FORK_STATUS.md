@@ -6,7 +6,7 @@ depend on each other. Upstream = `pewdiepie-archdaemon/odysseus`.
 This `main` branch is the fork's running build: latest upstream `main` + all the
 open-PR branches + fork-only items, combined.
 
-_Last updated: 2026-06-03 (dead-code cleanup PR #2214)._
+_Last updated: 2026-06-03 (dead-code cleanup PRs #2214, #2218)._
 
 ## Legend
 - **Open PR** — proposed upstream, awaiting review/merge.
@@ -30,6 +30,7 @@ _Last updated: 2026-06-03 (dead-code cleanup PR #2214)._
 | `ask_user` — agent-posed multiple-choice questions | `feat/ask-user` | [#2111](https://github.com/pewdiepie-archdaemon/odysseus/pull/2111) | Open | issue [#2110](https://github.com/pewdiepie-archdaemon/odysseus/issues/2110) | `ask_user` tool → `ask_user` SSE event, ends the turn; card with option buttons + free-text Other + dismiss ×, removed once answered. Question streamed as assistant text so it persists/replays (prevents re-ask loop). Independent (clean off upstream `main`). **Screenshots still to be dragged into the PR.** |
 | Provider line in the model-info card | `feat/provider-label` | [#2185](https://github.com/pewdiepie-archdaemon/odysseus/pull/2185) | Open | issue [#2184](https://github.com/pewdiepie-archdaemon/odysseus/issues/2184) | Model-info popup gains a **Provider** line from the session endpoint host (GitHub Copilot / OpenRouter / Anthropic / Local / …), distinguishing the same model name served by different routes. `providerLabel()` in `providers.js`. Independent (clean off upstream `main`). **Screenshot still to be dragged into the PR.** |
 | Cleanup: drop unused `UPLOAD_DIR` imports | `chore/rm-unused-upload-dir-import` | [#2214](https://github.com/pewdiepie-archdaemon/odysseus/pull/2214) | Open | issue [#2213](https://github.com/pewdiepie-archdaemon/odysseus/issues/2213) | Pure upstream dead-code removal — 8 unused `from src.constants import UPLOAD_DIR` lines in `routes/document_routes.py`. One file, no behaviour change. Not a fork delta (not carried in the build). Small/focused — the rest of the unused-import findings deliberately left out. |
+| Cleanup: drop unused `uuid` import | `chore/rm-unused-uuid-import` | [#2218](https://github.com/pewdiepie-archdaemon/odysseus/pull/2218) | Open | issue [#2217](https://github.com/pewdiepie-archdaemon/odysseus/issues/2217) | Pure dead-code removal — unused `import uuid` in `app.py`. One line, no behaviour change. Sibling of #2214. |
 
 All rebased on fresh upstream `main` and use the upstream PR template.
 
