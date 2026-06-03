@@ -26,6 +26,7 @@ _Last updated: 2026-06-03._
 | Plan mode for the chat agent | `plan-mode` | [#638](https://github.com/pewdiepie-archdaemon/odysseus/pull/638) | Open, mergeable | none | Read-only investigate → checklist → approve → execute. |
 | CI workflow (syntax + tests) | `ci-checks` | [#1966](https://github.com/pewdiepie-archdaemon/odysseus/pull/1966) | Open (re-filed) | issue [#1965](https://github.com/pewdiepie-archdaemon/odysseus/issues/1965) | Re-opened after #1015 was closed for being tooling-without-an-issue; #1965 is the issue-first discussion. `.github/workflows/ci.yml`. |
 | Code-navigation tools (grep, glob, ls) + read_file line ranges | `code-nav-tools` | [#1670](https://github.com/pewdiepie-archdaemon/odysseus/pull/1670) | Open, mergeable | none | Standalone version (confined to the `_resolve_tool_path` allowlist, no workspace dep). ripgrep-backed grep with Python fallback. |
+| Round-limit handling — Continue at cap + configurable cap | `feat/continue-on-round-limit` | [#1999](https://github.com/pewdiepie-archdaemon/odysseus/pull/1999) | Open | issue [#1997](https://github.com/pewdiepie-archdaemon/odysseus/issues/1997) | `rounds_exhausted` event → Continue pill (bottom, repeatable); admin "Max steps per message" setting (validated 1..200). |
 
 All rebased on fresh upstream `main` and use the upstream PR template.
 
@@ -43,7 +44,6 @@ All rebased on fresh upstream `main` and use the upstream PR template.
 | Code-navigation tools — workspace-aware variant | `feat/code-nav-tools` | yes | `workspace-confine` (#1103) path helper, `plan-mode` (#638) read-only set | Workspace-confined + plan-mode-readonly superset of #1670. Runs in the fork build; folds into #1670 once #1103 + #638 land. |
 | Git branch indicator (workspace / data dir) | `feat/git-branch-indicator` | yes | `workspace-confine` (#1103) for the workspace readout | Shows the checked-out branch of the active workspace (else the data dir, only when the dir itself is a repo top level — doesn't climb to a parent repo); reloads on each LLM message. Silent no-op when git is unavailable. Ready to PR. |
 | AGENTS.md / CLAUDE.md project instructions | `feat/agents-md` | yes | `workspace-confine` (#1103) workspace note block | Reads repo-authored instructions (AGENTS.md → CLAUDE.md, workspace root only, 32 KB cap) and prepends them to the system prompt. Mirrors opencode / Claude Code. Ready to PR (folds in with #1103). |
-| Continue on round limit | `feat/continue-on-round-limit` | yes | none | Emits a `rounds_exhausted` SSE event at the step cap (still 20) so the UI shows a Continue button instead of stalling. Independent of workspace/plan — **ready to PR off upstream main**. |
 
 ## Project notes
 
