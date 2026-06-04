@@ -67,12 +67,13 @@ def _unified_diff(old: str, new: str, path: str) -> Optional[Dict[str, Any]]:
     }
 
 
-async def _do_edit_file(content: str) -> Dict[str, Any]:
+async def _do_edit_file(content: str, workspace: Optional[str] = None) -> Dict[str, Any]:
     """Exact string-replacement edit of an on-disk file.
 
     content is JSON: {"path", "old_string", "new_string", "replace_all"?}.
     Fails if old_string is missing or non-unique (unless replace_all) so the
     model can't silently edit the wrong place. Returns a unified diff for the UI.
+    Confined to the workspace when one is set (same policy as write_file).
     """
     try:
         args = json.loads(content) if content.strip().startswith("{") else {}
@@ -84,9 +85,11 @@ async def _do_edit_file(content: str) -> Dict[str, Any]:
     replace_all = bool(args.get("replace_all", False))
     if not raw_path:
         return {"error": "edit_file: path required", "exit_code": 1}
-    # Confine to the same allowlist + sensitive-file policy as read/write_file.
+    # Confine to the workspace when set, else the same allowlist + sensitive-file
+    # policy as read/write_file.
     try:
-        path = _resolve_tool_path(raw_path)
+        path = (_resolve_tool_path_in_workspace(workspace, raw_path)
+                if workspace else _resolve_tool_path(raw_path))
     except ValueError as e:
         return {"error": f"edit_file: {e}", "exit_code": 1}
     if old == "":
@@ -339,14 +342,19 @@ _CODENAV_MAX_HITS = 200
 _CODENAV_MAX_LINE = 400
 
 
-def _resolve_search_root(raw_path: str) -> str:
+def _resolve_search_root(raw_path: str, workspace: Optional[str] = None) -> str:
     """Resolve + confine a code-nav path (grep/glob/ls).
 
-    Empty path → the agent's primary root (first allowlisted root, i.e. the
-    project data dir). A supplied path is confined by the same allowlist +
-    sensitive-file policy as read_file (_resolve_tool_path).
+    With a workspace set, the workspace folder is the root and supplied paths are
+    confined inside it (same policy as read_file). Without one, an empty path
+    defaults to the agent's primary root (project data dir) and a supplied path
+    is confined by the global allowlist + sensitive-file policy.
     """
     raw = (raw_path or "").strip()
+    if workspace:
+        if not raw:
+            return os.path.realpath(workspace)
+        return _resolve_tool_path_in_workspace(workspace, raw)
     if not raw:
         roots = _tool_path_roots()
         return roots[0] if roots else os.path.realpath(".")
@@ -795,7 +803,7 @@ async def _direct_fallback(
                 max_hits = _CODENAV_MAX_HITS
             max_hits = max(1, min(max_hits, _CODENAV_MAX_HITS))
             try:
-                root = _resolve_search_root(str(args.get("path", "")))
+                root = _resolve_search_root(str(args.get("path", "")), workspace)
             except ValueError as e:
                 return {"error": f"grep: {e}", "exit_code": 1}
 
@@ -879,7 +887,7 @@ async def _direct_fallback(
             if not pattern:
                 return {"error": "glob: pattern is required", "exit_code": 1}
             try:
-                root = _resolve_search_root(str(args.get("path", "")))
+                root = _resolve_search_root(str(args.get("path", "")), workspace)
             except ValueError as e:
                 return {"error": f"glob: {e}", "exit_code": 1}
 
@@ -926,7 +934,7 @@ async def _direct_fallback(
             else:
                 raw_path = _s.split("\n", 1)[0].strip()
             try:
-                root = _resolve_search_root(raw_path)
+                root = _resolve_search_root(raw_path, workspace)
             except ValueError as e:
                 return {"error": f"ls: {e}", "exit_code": 1}
 
@@ -1178,7 +1186,7 @@ async def execute_tool_block(
         _is_bg, _bg_cmd = _split_bg_marker(content)
         if _is_bg and _bg_cmd:
             from src import bg_jobs
-            rec = bg_jobs.launch(_bg_cmd, session_id=session_id, cwd=workspace or None)
+            rec = bg_jobs.launch(_bg_cmd, session_id=session_id, cwd=workspace or _AGENT_WORKDIR)
             short = _bg_cmd.strip().split(chr(10))[0][:80]
             desc = f"bash (background): {short}"
             result = {
@@ -1308,7 +1316,7 @@ async def execute_tool_block(
         desc = "edit_image"
         result = await do_edit_image(content, owner=owner)
     elif tool == "edit_file":
-        result = await _do_edit_file(content)
+        result = await _do_edit_file(content, workspace=workspace)
         desc = result.get("output") or result.get("error") or "edit_file"
     elif tool == "trigger_research":
         desc = "trigger_research"

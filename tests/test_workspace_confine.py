@@ -77,3 +77,40 @@ async def test_bash_runs_with_workspace_cwd():
     res = await _direct_fallback("bash", "pwd", workspace=ws)
     assert res["exit_code"] == 0
     assert os.path.realpath(res["output"].strip()) == os.path.realpath(ws)
+
+
+# --- Tools that landed after this PR, now wired into the workspace -----------
+
+@pytest.mark.asyncio
+async def test_edit_file_confined_in_workspace():
+    import json
+    from src.tool_execution import _do_edit_file
+    ws = tempfile.mkdtemp()
+    open(os.path.join(ws, "f.txt"), "w").write("foo bar")
+    # Edit inside the workspace succeeds.
+    res = await _do_edit_file(json.dumps(
+        {"path": "f.txt", "old_string": "foo", "new_string": "baz"}), workspace=ws)
+    assert res["exit_code"] == 0
+    assert open(os.path.join(ws, "f.txt")).read() == "baz bar"
+    # Editing outside the workspace is rejected.
+    res = await _do_edit_file(json.dumps(
+        {"path": "/etc/hosts", "old_string": "a", "new_string": "b"}), workspace=ws)
+    assert res["exit_code"] == 1 and "outside the workspace" in res["error"]
+
+
+@pytest.mark.asyncio
+async def test_grep_and_ls_confined_in_workspace():
+    import json
+    ws = tempfile.mkdtemp()
+    open(os.path.join(ws, "doc.txt"), "w").write("hello workspace\n")
+    # grep with no path searches the workspace root and finds the match.
+    res = await _direct_fallback("grep", json.dumps({"pattern": "hello"}), workspace=ws)
+    assert res["exit_code"] == 0 and "doc.txt" in res["output"]
+    # grep pointed outside the workspace is rejected.
+    res = await _direct_fallback("grep", json.dumps({"pattern": "x", "path": "/etc"}), workspace=ws)
+    assert res["exit_code"] == 1 and "outside the workspace" in res["error"]
+    # ls of the workspace lists its files; ls outside is rejected.
+    res = await _direct_fallback("ls", "", workspace=ws)
+    assert res["exit_code"] == 0 and "doc.txt" in res["output"]
+    res = await _direct_fallback("ls", "/etc", workspace=ws)
+    assert res["exit_code"] == 1 and "outside the workspace" in res["error"]
