@@ -39,6 +39,11 @@ logger = logging.getLogger(__name__)
 # Pending device-flow logins, keyed by an opaque poll_id. The device_code is a
 # bearer-like secret, so it lives here (server memory) rather than in the
 # browser. Entries expire with the GitHub device code.
+#
+# NOTE: this is per-process state. The device flow assumes a single worker
+# (Odysseus' default): with multiple uvicorn workers, the poll request can land
+# on a worker that never saw the start, returning "Unknown or expired login
+# session". Move this to a shared store (DB/Redis) if running multi-worker.
 _PENDING: Dict[str, Dict] = {}
 _PENDING_LOCK = threading.Lock()
 
@@ -60,7 +65,10 @@ def _provision_endpoint(token: str, base: str, owner: Optional[str]) -> Dict:
     model_ids = [m["id"] for m in models]
     # Copilot picker models support OpenAI-style tool calling; mark the endpoint
     # tool-capable so the agent loop sends native tool schemas.
-    supports_tools = True if any(m.get("tool_calls") for m in models) else (True if not models else False)
+    # Tool-capable if any picker model advertises tool_calls. When the model
+    # fetch failed (empty list) default to True, since Copilot picker models
+    # support OpenAI-style tool calling.
+    supports_tools = bool(not models or any(m.get("tool_calls") for m in models))
 
     db = SessionLocal()
     try:
