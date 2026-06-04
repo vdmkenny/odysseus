@@ -6,7 +6,7 @@ depend on each other. Upstream = `pewdiepie-archdaemon/odysseus`.
 This `main` branch is the fork's running build: latest upstream `main` + all the
 open-PR branches + fork-only items, combined.
 
-_Last updated: 2026-06-04 (src/search dedup PR #2506 finishes #2504)._
+_Last updated: 2026-06-04 (granted collaborator; 12 open PRs retargeted main -> dev)._
 
 ## Legend
 - **Open PR** — proposed upstream, awaiting review/merge.
@@ -34,7 +34,7 @@ _Last updated: 2026-06-04 (src/search dedup PR #2506 finishes #2504)._
 | Cleanup: dedupe `src/search` cache/content/query into shims | `chore/dedup-src-search` | [#2506](https://github.com/pewdiepie-archdaemon/odysseus/pull/2506) | Open | Fixes [#2504](https://github.com/pewdiepie-archdaemon/odysseus/issues/2504) | cache/content/query → `sys.modules` aliases of `services/search/*` (matches core/providers/ranking). ~600 dup LoC removed; src-coupled tests repointed to services; redundant parity-test params dropped. analytics is #2264. |
 | Cleanup: dedupe `src/search/analytics.py` into a shim | `chore/dedup-search-analytics` | [#2269](https://github.com/pewdiepie-archdaemon/odysseus/pull/2269) | **Closed (dup)** | issue [#2262](https://github.com/pewdiepie-archdaemon/odysseus/issues/2262) | Closed in favour of #2264 (NubsCarson), opened ~4 min earlier for the same issue #2262 with a cleaner module-alias approach. Issue #2262 stays; #2264 fixes it. Fork build still carries the local shim until #2264 lands upstream. |
 
-All rebased on fresh upstream `main` and use the upstream PR template.
+**vdmkenny is now an upstream Collaborator; PRs target `dev` (main is maintainer-curated).** All rebased on fresh upstream and use the PR template.
 
 > **Two code-nav variants.** The PR (`code-nav-tools`, #1670) is standalone —
 > confined to the data/tmp allowlist, no workspace/plan dependency. The fork's

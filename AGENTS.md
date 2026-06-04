@@ -29,9 +29,18 @@ feature — none of the above.
 
 ## Working with the upstream maintainer (automated + strict)
 
+**Status (2026-06-04): vdmkenny is now a Collaborator with write access.**
+
+- **PRs target `dev`, NOT `main`.** `main` is curated by the maintainer
+  (pewdiepie-archdaemon); `dev` is the integration branch (`dev` is ahead of
+  `main`). Base every new PR on `dev`; rebase open branches onto `origin/dev`.
+- Write access means branches can be pushed to the upstream repo directly, but
+  keep using PRs into `dev` for review. Do not push to or merge `main`.
+- Maintainer contact: Felix; email shared off-list.
+
 Upstream enforces `CONTRIBUTING.md` mechanically:
 
-- **ALWAYS re-read `CONTRIBUTING.md` fresh** (from `origin/main`) before opening
+- **ALWAYS re-read `CONTRIBUTING.md` fresh** (from `origin/dev`) before opening
   or updating any issue or PR, and verify the submission against it — it changes,
   and conformance is gated. Use the current issue/PR templates.
 - **Tooling/CI changes** (workflows, dev tooling, packaging) → **open an issue
