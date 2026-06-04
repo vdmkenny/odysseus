@@ -90,24 +90,26 @@ export function providerLogo(modelId) {
   return null;
 }
 
-// Host substring → friendly provider label. The model-info card shows this so
-// the SAME model name served by DIFFERENT routes is distinguishable (e.g.
-// `claude-haiku` via OpenRouter vs GitHub Copilot vs Anthropic direct) — the
-// logo only reflects the model vendor, not the actual endpoint.
+// Host suffix → friendly provider label. The model-info card shows this so the
+// SAME model name served by DIFFERENT routes is distinguishable (e.g.
+// `claude-haiku` via OpenRouter vs GitHub Copilot vs Anthropic direct); the logo
+// only reflects the model vendor, not the actual endpoint. Patterns are anchored
+// to the end of the hostname (^|.)domain$ so a host like `max.airlines.com`
+// doesn't match `x.ai`.
 const _ENDPOINT_LABELS = [
-  [/githubcopilot\.com|copilot/i, "GitHub Copilot"],
-  [/openrouter\.ai/i, "OpenRouter"],
-  [/api\.anthropic\.com/i, "Anthropic"],
-  [/api\.openai\.com/i, "OpenAI"],
-  [/generativelanguage\.googleapis\.com|aiplatform\.googleapis\.com/i, "Google"],
-  [/bedrock.*\.amazonaws\.com/i, "AWS Bedrock"],
-  [/deepseek\.com/i, "DeepSeek"],
-  [/mistral\.ai/i, "Mistral"],
-  [/groq\.com/i, "Groq"],
-  [/together\.(ai|xyz)/i, "Together"],
-  [/fireworks\.ai/i, "Fireworks"],
-  [/perplexity\.ai/i, "Perplexity"],
-  [/x\.ai/i, "xAI"],
+  [/(^|\.)githubcopilot\.com$/i, "GitHub Copilot"],
+  [/(^|\.)openrouter\.ai$/i, "OpenRouter"],
+  [/(^|\.)anthropic\.com$/i, "Anthropic"],
+  [/(^|\.)openai\.com$/i, "OpenAI"],
+  [/(^|\.)(generativelanguage|aiplatform)\.googleapis\.com$/i, "Google"],
+  [/(^|\.)bedrock[\w.-]*\.amazonaws\.com$/i, "AWS Bedrock"],
+  [/(^|\.)deepseek\.com$/i, "DeepSeek"],
+  [/(^|\.)mistral\.ai$/i, "Mistral"],
+  [/(^|\.)groq\.com$/i, "Groq"],
+  [/(^|\.)together\.(ai|xyz)$/i, "Together"],
+  [/(^|\.)fireworks\.ai$/i, "Fireworks"],
+  [/(^|\.)perplexity\.ai$/i, "Perplexity"],
+  [/(^|\.)x\.ai$/i, "xAI"],
 ];
 
 /**
@@ -129,7 +131,7 @@ export function providerLabel(endpointUrl) {
     return "Local";
   }
   for (const [re, label] of _ENDPOINT_LABELS) {
-    if (re.test(endpointUrl)) return label;
+    if (re.test(host)) return label;
   }
   // Unknown host → drop a leading "api." for a cleaner readout.
   return host.replace(/^api\./i, "");
