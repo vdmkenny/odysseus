@@ -6,7 +6,7 @@ depend on each other. Upstream = `pewdiepie-archdaemon/odysseus`.
 This `main` branch is the fork's running build: latest upstream `main` + all the
 open-PR branches + fork-only items, combined.
 
-_Last updated: 2026-06-04 (src/search cache dedup PR #2506; issue #2504)._
+_Last updated: 2026-06-04 (src/search dedup PR #2506 finishes #2504)._
 
 ## Legend
 - **Open PR** — proposed upstream, awaiting review/merge.
@@ -31,7 +31,7 @@ _Last updated: 2026-06-04 (src/search cache dedup PR #2506; issue #2504)._
 | Provider line in the model-info card | `feat/provider-label` | [#2185](https://github.com/pewdiepie-archdaemon/odysseus/pull/2185) | Open | issue [#2184](https://github.com/pewdiepie-archdaemon/odysseus/issues/2184) | Model-info popup gains a **Provider** line from the session endpoint host (GitHub Copilot / OpenRouter / Anthropic / Local / …), distinguishing the same model name served by different routes. `providerLabel()` in `providers.js`. Independent (clean off upstream `main`). **Screenshot still to be dragged into the PR.** |
 | Cleanup: drop unused `UPLOAD_DIR` imports | `chore/rm-unused-upload-dir-import` | [#2214](https://github.com/pewdiepie-archdaemon/odysseus/pull/2214) | Open | issue [#2213](https://github.com/pewdiepie-archdaemon/odysseus/issues/2213) | Pure upstream dead-code removal — 8 unused `from src.constants import UPLOAD_DIR` lines in `routes/document_routes.py`. One file, no behaviour change. Not a fork delta (not carried in the build). Small/focused — the rest of the unused-import findings deliberately left out. |
 | Cleanup: drop unused `uuid` import | `chore/rm-unused-uuid-import` | [#2218](https://github.com/pewdiepie-archdaemon/odysseus/pull/2218) | Open | issue [#2217](https://github.com/pewdiepie-archdaemon/odysseus/issues/2217) | Pure dead-code removal — unused `import uuid` in `app.py`. One line, no behaviour change. Sibling of #2214. |
-| Cleanup: dedupe `src/search/cache.py` into a shim | `chore/dedup-src-search` | [#2506](https://github.com/pewdiepie-archdaemon/odysseus/pull/2506) | Open | issue [#2504](https://github.com/pewdiepie-archdaemon/odysseus/issues/2504) | Byte-identical copy → `sys.modules` alias of `services/search/cache.py` (matches core/providers/ranking shims). content/query deferred (structurally diverged, need src-coupled tests repointed); analytics is #2264. |
+| Cleanup: dedupe `src/search` cache/content/query into shims | `chore/dedup-src-search` | [#2506](https://github.com/pewdiepie-archdaemon/odysseus/pull/2506) | Open | Fixes [#2504](https://github.com/pewdiepie-archdaemon/odysseus/issues/2504) | cache/content/query → `sys.modules` aliases of `services/search/*` (matches core/providers/ranking). ~600 dup LoC removed; src-coupled tests repointed to services; redundant parity-test params dropped. analytics is #2264. |
 | Cleanup: dedupe `src/search/analytics.py` into a shim | `chore/dedup-search-analytics` | [#2269](https://github.com/pewdiepie-archdaemon/odysseus/pull/2269) | **Closed (dup)** | issue [#2262](https://github.com/pewdiepie-archdaemon/odysseus/issues/2262) | Closed in favour of #2264 (NubsCarson), opened ~4 min earlier for the same issue #2262 with a cleaner module-alias approach. Issue #2262 stays; #2264 fixes it. Fork build still carries the local shim until #2264 lands upstream. |
 
 All rebased on fresh upstream `main` and use the upstream PR template.
