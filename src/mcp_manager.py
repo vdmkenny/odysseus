@@ -92,6 +92,8 @@ def _format_mcp_params(input_schema: Any) -> str:
 
 # Tool-name prefixes that denote a read-only/inspection operation. Used to
 # classify MCP tools for plan mode when the server provides no readOnlyHint.
+# These are PREFIXES, not whole words (matched via str.startswith below), so a
+# stem like "summar" intentionally covers "summarise"/"summarize"/"summary".
 _MCP_READONLY_VERBS = (
     "list", "get", "read", "search", "fetch", "query", "find", "describe",
     "show", "view", "lookup", "count", "status", "info", "inspect", "summar",
