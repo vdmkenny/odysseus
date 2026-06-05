@@ -56,13 +56,16 @@ NON_ADMIN_BLOCKED_TOOLS = {
 # manage_*, model serving, MCP, etc.) is blocked. Allowlist rather than blocklist
 # so any newly added tool defaults to BLOCKED in plan mode — fail safe.
 #
-# bash/python are allowed for richer investigation, but they CAN mutate (write
-# files, hit the network) and can't be constrained to read-only at the tool
-# layer. The plan-mode system prompt warns HARD that shell is inspection-only.
-# This is a prompt-enforced boundary for shell; every other write path is
-# hard-blocked below.
+# bash/python are deliberately NOT here: the shell can mutate (write files, hit
+# the network) and can't be constrained to read-only at the tool layer, so plan
+# mode blocks it outright rather than relying on a prompt to keep it well-behaved.
+# Code/file discovery is covered by the dedicated read-only tools below
+# (read_file, grep, glob, ls) instead of freestyle shell.
 PLAN_MODE_READONLY_TOOLS = {
     "read_file",
+    "grep",
+    "glob",
+    "ls",
     "web_search",
     "web_fetch",
     "search_chats",
@@ -79,8 +82,6 @@ PLAN_MODE_READONLY_TOOLS = {
     "resolve_contact",
     "chat_with_model",
     "ask_teacher",
-    "bash",
-    "python",
 }
 
 
@@ -101,6 +102,9 @@ _PLAN_MODE_FALLBACK_BLOCK = {
     "archive_email", "mark_email_read", "download_model", "serve_model",
     "stop_served_model", "cancel_download", "adopt_served_model", "serve_preset",
     "generate_image", "edit_image", "trigger_research", "manage_research",
+    # Shell is never read-only-safe; block it explicitly so it stays out of plan
+    # mode even if the schema list fails to load.
+    "bash", "python",
 }
 
 

@@ -40,9 +40,18 @@ def test_plan_mode_blocks_mutating_tools():
 
 def test_plan_mode_allows_readonly_tools():
     disabled = plan_mode_disabled_tools()
-    # Investigation tools (incl. intentionally-allowed bash/python) stay enabled.
-    for name in ("read_file", "web_search", "web_fetch", "search_chats", "bash", "python"):
+    # Read-only investigation tools stay enabled, including the discovery tools
+    # (grep/glob/ls) that replace freestyle shell.
+    for name in ("read_file", "grep", "glob", "ls", "web_search", "web_fetch", "search_chats"):
         assert name not in disabled, f"{name} should be usable in plan mode"
+
+
+def test_plan_mode_blocks_shell():
+    # bash/python can mutate and can't be constrained read-only, so plan mode
+    # must block them (the whole point of dropping shell from plan mode).
+    disabled = plan_mode_disabled_tools()
+    for name in ("bash", "python"):
+        assert name in disabled, f"{name} must be blocked in plan mode"
 
 
 def test_disabled_never_intersects_allowlist():
