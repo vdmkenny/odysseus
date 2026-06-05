@@ -85,13 +85,20 @@ PLAN_MODE_READONLY_TOOLS = {
 }
 
 
-# Known mutating/external tools, ALWAYS blocked in plan mode. This is both a
-# floor (some real tools — e.g. manage_notes, generate_image — are XML-invocable
-# and absent from FUNCTION_TOOL_SCHEMAS, so the dynamic universe alone would miss
-# them) and the fail-closed fallback if the schema list can't load at all. Plan
-# mode must NEVER fail open (silently allow mutations). Keep in sync with new
-# mutating tools.
-_PLAN_MODE_FALLBACK_BLOCK = {
+# The agent's tool gate is a DENYLIST: execute_tool_block blocks any tool whose
+# name is in `disabled_tools`. Plan mode's policy is the opposite — an allowlist
+# (PLAN_MODE_READONLY_TOOLS). To apply an allowlist through a denylist, plan mode
+# returns the inverse: every known tool name minus the allowlist.
+#
+# Known tool names come from FUNCTION_TOOL_SCHEMAS, but that source is imperfect:
+# some tools are only XML-invocable (e.g. manage_notes, generate_image) and never
+# appear there, and the import can fail outright. Either gap would drop a mutating
+# tool from the subtraction and silently leave it enabled. This set is the static
+# backstop for both: union it in so known mutators are always subtracted, and so a
+# failed import still blocks them (fail closed, never open). Only mutators belong
+# here — read-only tools are covered by the allowlist. Keep in sync when adding
+# new mutating tools.
+_PLAN_MODE_KNOWN_MUTATORS = {
     "write_file", "create_document", "edit_document", "update_document",
     "suggest_document", "manage_documents", "create_session", "manage_session",
     "send_to_session", "pipeline", "manage_memory", "manage_skills",
@@ -109,9 +116,14 @@ _PLAN_MODE_FALLBACK_BLOCK = {
 
 
 def plan_mode_disabled_tools() -> Set[str]:
-    """Tools to disable in plan mode: every built-in tool not on the read-only
-    allowlist. MCP tools are dynamic and disabled separately (the loop drops the
-    MCP manager entirely in plan mode)."""
+    """Tool names to add to the denylist in plan mode.
+
+    Plan mode allows only PLAN_MODE_READONLY_TOOLS. The gate is a denylist, so
+    return the inverse: every known tool name minus the allowlist. Known names
+    come from the function-tool schemas, backstopped by _PLAN_MODE_KNOWN_MUTATORS
+    (see above) so XML-only tools and a failed schema import can't leave a mutator
+    enabled. MCP tools are handled separately — the loop drops the MCP manager
+    entirely in plan mode."""
     try:
         # agent_tools / tool_parsing / tool_schemas form a mutually-circular
         # cluster that only resolves cleanly when entered via agent_tools.
@@ -128,9 +140,10 @@ def plan_mode_disabled_tools() -> Set[str]:
     except Exception as exc:
         logger.warning("Unable to load tool schemas for plan-mode gating: %s", exc)
         all_names = set()
-    # Union the known-mutating floor so XML-invocable tools missing from the
-    # schema list are still blocked, and so we fail closed if all_names is empty.
-    return (all_names | _PLAN_MODE_FALLBACK_BLOCK) - PLAN_MODE_READONLY_TOOLS
+    # Subtract the allowlist from all known tool names (schema-derived plus the
+    # static mutator backstop). Fail closed: if the schema import failed above,
+    # the backstop alone still blocks known mutators.
+    return (all_names | _PLAN_MODE_KNOWN_MUTATORS) - PLAN_MODE_READONLY_TOOLS
 
 
 def is_public_blocked_tool(tool_name: Optional[str]) -> bool:

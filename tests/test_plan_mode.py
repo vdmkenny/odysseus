@@ -7,7 +7,7 @@ contract:
 - The read-only allowlist contains only inspection tools (no writes/sends/manage_*).
 - `plan_mode_disabled_tools()` blocks every mutating tool and never blocks an
   allowlisted one.
-- It fails CLOSED: if the tool-schema universe can't be loaded, it still blocks a
+- It fails CLOSED: if the tool-schema list can't be loaded, it still blocks a
   known-mutating set rather than returning nothing (which would allow mutations).
 
 Pure-function tests — no FastAPI app boot, no DB.
@@ -15,7 +15,7 @@ Pure-function tests — no FastAPI app boot, no DB.
 
 from src.tool_security import (
     PLAN_MODE_READONLY_TOOLS,
-    _PLAN_MODE_FALLBACK_BLOCK,
+    _PLAN_MODE_KNOWN_MUTATORS,
     plan_mode_disabled_tools,
 )
 
@@ -72,7 +72,7 @@ def test_mcp_readonly_classification():
 
 
 def test_fail_closed_fallback_blocks_mutations(monkeypatch):
-    # If the schema universe can't load, we must still block (fail closed), not
+    # If the schema list can't load, we must still block (fail closed), not
     # return an empty set that would silently allow every mutating tool.
     import src.tool_security as ts
 
@@ -87,7 +87,7 @@ def test_fail_closed_fallback_blocks_mutations(monkeypatch):
     assert disabled, "plan mode must never fail open (empty disabled set)"
     assert "write_file" in disabled
     assert "send_email" in disabled
-    assert disabled == set(_PLAN_MODE_FALLBACK_BLOCK)
+    assert disabled == set(_PLAN_MODE_KNOWN_MUTATORS)
 
 
 def test_active_plan_note_pins_checklist():
