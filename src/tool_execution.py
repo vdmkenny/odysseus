@@ -1099,7 +1099,8 @@ async def _direct_fallback(
                     return (r.stdout or "").lower()
                 except Exception:
                     return ""
-            host = _origin_host()
+            # Run the blocking git lookup off the event loop.
+            host = await asyncio.to_thread(_origin_host)
             if "gitlab" in host:
                 cli, cli_path = ("glab", glab_path) if glab_path else (None, None)
             elif "github" in host:
