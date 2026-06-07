@@ -1,8 +1,8 @@
-name: ci / PR description check
+name: ci / PR checks
 
 on:
   pull_request_target:
-    types: [opened, edited, synchronize, reopened]
+    types: [opened, edited, synchronize, reopened, ready_for_review]
 
 # pull_request_target runs in the base-repo context (has secrets).
 # The checkout below pins to the base branch so no fork code is executed.
@@ -48,4 +48,56 @@ jobs:
               );
             } else {
               core.info(`PR title OK: ${title}`);
+            }
+
+  check-mergeable:
+    name: Flag unmergeable PRs
+    runs-on: ubuntu-latest
+    # Skip bots: they open PRs programmatically and have their own process.
+    if: github.event.pull_request.user.type != 'Bot'
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
+        with:
+          script: |
+            const repo = { owner: context.repo.owner, repo: context.repo.repo };
+            const number = context.payload.pull_request.number;
+            const READY = "ready for review";
+            const CONFLICT = "merge conflict";
+
+            // Ensure the conflict label exists (red). Ignore if already present.
+            try {
+              await github.rest.issues.getLabel({ ...repo, name: CONFLICT });
+            } catch {
+              await github.rest.issues.createLabel({
+                ...repo, name: CONFLICT, color: "B60205",
+                description: "Conflicts with the base branch; needs a rebase before review.",
+              }).catch(() => {});
+            }
+
+            // mergeable is computed asynchronously and is often null right after
+            // an event, so poll a few times until GitHub has resolved it.
+            let pr = null;
+            for (let i = 0; i < 5; i++) {
+              const { data } = await github.rest.pulls.get({ ...repo, pull_number: number });
+              if (data.mergeable !== null) { pr = data; break; }
+              await new Promise(r => setTimeout(r, 3000));
+            }
+            if (!pr || pr.draft) return;
+            const labels = pr.labels.map(l => l.name);
+
+            if (pr.mergeable === false) {
+              if (labels.includes(READY)) {
+                await github.rest.issues.removeLabel({ ...repo, issue_number: number, name: READY }).catch(() => {});
+              }
+              if (!labels.includes(CONFLICT)) {
+                await github.rest.issues.addLabels({ ...repo, issue_number: number, labels: [CONFLICT] });
+                await github.rest.issues.createComment({
+                  ...repo, issue_number: number,
+                  body: "This PR conflicts with `dev` and can't be merged as-is, so I removed the `ready for review` label and added `merge conflict`. Please rebase on the latest `dev` and resolve the conflicts; the label clears once it's mergeable again.",
+                });
+              }
+            } else if (pr.mergeable === true) {
+              if (labels.includes(CONFLICT)) {
+                await github.rest.issues.removeLabel({ ...repo, issue_number: number, name: CONFLICT }).catch(() => {});
+              }
             }
