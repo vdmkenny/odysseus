@@ -30,7 +30,12 @@ logger = logging.getLogger(__name__)
 # Tools that are ALWAYS included regardless of retrieval results.
 # These are the most commonly needed and should never be missing.
 ALWAYS_AVAILABLE = frozenset({
-    "bash", "python", "web_search", "web_fetch",
+    "bash", "python",
+    # NOTE: web_search / web_fetch are intentionally NOT here. They are
+    # exposed only on explicit search/current-info/URL intent (see the web
+    # entry in _KEYWORD_HINTS and _URL_RE in get_tools_for_query), so a
+    # trivial agent-mode prompt like "test" / "yo" no longer surfaces or
+    # triggers SearXNG web search (regression from #2684, per maintainer note).
     # File tools: read AND write/edit. An agent with disk access should always
     # be able to change files, not just read them — otherwise a bare "edit X"
     # request can miss write_file/edit_file (RAG-only) and the model wrongly
@@ -357,7 +362,21 @@ class ToolIndex:
     )
 
     # Keyword hints: if the query mentions these words, force-include the tools.
+    # A literal URL or bare domain in the prompt signals the user wants a
+    # specific page fetched (e.g. 'check example.com', 'open https://...').
+    _URL_RE = re.compile(
+        r"\bhttps?://|\bwww\.|\b[\w-]+\.(?:com|org|net|io|dev|ai|app|gov|edu|co)\b",
+        re.IGNORECASE,
+    )
+
     _KEYWORD_HINTS = {
+        # Web lookup intent — surface the web tools only when the user is
+        # actually asking to search / get current info / open a URL.
+        frozenset({"search", "google", "look up", "lookup", "search for",
+                   "latest", "news", "weather", "web", "online",
+                   "internet", "fetch", "website", "web search",
+                   "current price", "stock price", "what's new"}):
+            {"web_search", "web_fetch"},
         # NOTE: "tell" was removed from this set. It fired on any "tell me ..."
         # request (e.g. "visit <url> and tell me the title"), force-including the
         # whole email toolset and crowding out the relevant tools — the model then
@@ -516,6 +535,9 @@ class ToolIndex:
         # the agent can actually create the cron job instead of fumbling.
         if self._SCHEDULE_RE.search(ql):
             base.add("manage_tasks")
+        # A URL/domain in the prompt = the user named a page to read.
+        if self._URL_RE.search(ql):
+            base.update({"web_fetch", "web_search"})
         return base
 
 
