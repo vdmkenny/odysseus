@@ -1,4 +1,4 @@
-"""Workspace API — browse server directories to pick a tool workspace folder."""
+"""Workspace API - browse server directories to pick a tool workspace folder."""
 import os
 from fastapi import APIRouter, Request, HTTPException, Query
 
@@ -34,7 +34,7 @@ def setup_workspace_routes():
             with os.scandir(target) as it:
                 for entry in it:
                     try:
-                        # Don't follow symlinks when classifying — a symlinked
+                        # Don't follow symlinks when classifying - a symlinked
                         # dir is skipped rather than letting the browser wander
                         # off via a link. Hidden entries are omitted.
                         if entry.is_dir(follow_symlinks=False) and not entry.name.startswith("."):

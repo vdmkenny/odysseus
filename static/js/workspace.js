@@ -122,7 +122,7 @@ function _getModal() {
       <input type="text" class="styled-prompt-input workspace-cur" id="workspace-cur-path"
              spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"
              placeholder="Type or paste a folder path, then press Enter" />
-      <p class="muted workspace-note">read_file / write_file / edit_file / grep / glob / ls are <strong>confined</strong> to this folder. bash &amp; python start here (cwd) but are <strong>not sandboxed</strong> — they can still reach outside it. A workspace scopes the tools, it is not a security boundary.</p>
+      <p class="muted workspace-note">read_file / write_file / edit_file / grep / glob / ls are <strong>confined</strong> to this folder. bash &amp; python start here (cwd) but are <strong>not sandboxed</strong> - they can still reach outside it. A workspace scopes the tools, it is not a security boundary.</p>
       <div class="modal-body workspace-body" id="workspace-body"></div>
       <div class="modal-footer workspace-footer">
         <button type="button" class="confirm-btn confirm-btn-secondary" id="workspace-cancel">Cancel</button>
