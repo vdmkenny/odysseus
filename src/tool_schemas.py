@@ -25,7 +25,7 @@ FUNCTION_TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "bash",
-            "description": "Run a shell command (full access). PREFER the dedicated tools when they fit: read_file/write_file/edit_file for files, grep/glob/ls for searching/listing. Use bash only for what those do not cover (installs, git, builds, running programs, system info). Do NOT write or edit files via bash redirects/heredocs/sed -- use write_file/edit_file.",
+            "description": "Run a shell command (full access). Prefer a dedicated tool whenever one fits the job (reading, writing, editing, searching, or listing files); use bash only for what no dedicated tool covers (installs, git, builds, running programs, system info). Do NOT create or edit files via bash redirects/heredocs/sed -- use the dedicated file tools.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -39,7 +39,7 @@ FUNCTION_TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "python",
-            "description": "Execute Python code to compute a result or test something. PREFER the dedicated file tools (read_file/write_file/edit_file/grep/glob/ls) for reading, writing, or searching files. Use python only for computation, data processing, or scripting those tools do not cover.",
+            "description": "Execute Python code to compute a result or test something. Prefer a dedicated tool whenever one fits the job (reading, writing, or searching files); use python only for computation, data processing, or scripting no dedicated tool covers.",
             "parameters": {
                 "type": "object",
                 "properties": {
