@@ -1801,7 +1801,15 @@ async def stream_agent_loop(
     if not guide_only and not _relevant_tools and bool(_intent.get("low_signal")):
         from src.tool_index import ALWAYS_AVAILABLE
         _relevant_tools = set(ALWAYS_AVAILABLE)
-        logger.info("[tool-rag] Low-signal agent message; skipping retrieval and using always-available tools only")
+        if workspace:
+            # An active workspace IS the file-work signal: a vague "look at the
+            # project" means use this folder. Include the file/code tools (incl.
+            # get_workspace) so the agent can act instead of saying it has no
+            # file access. (Owner gating still applies downstream.)
+            _relevant_tools |= _DOMAIN_TOOL_MAP["files"]
+            logger.info("[tool-rag] Low-signal but workspace active; including file tools")
+        else:
+            logger.info("[tool-rag] Low-signal agent message; skipping retrieval and using always-available tools only")
     if not guide_only and not _relevant_tools:
         try:
             from src.tool_index import get_tool_index, ALWAYS_AVAILABLE

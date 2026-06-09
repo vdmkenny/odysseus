@@ -166,6 +166,56 @@ async def test_binding_does_not_leak(ws, admin):
     assert get_active_workspace() is None
 
 
+# ── tool selection: an active workspace is the file-work signal ─────────
+# A vague ("low-signal") message like "look at the local project" matches no
+# domain keywords, so retrieval is normally skipped. When a workspace is set it
+# must still surface the file tools, otherwise the agent says it has no file
+# access (the bug this guards against).
+
+def _sent_tool_names(monkeypatch, *, workspace):
+    import asyncio
+    import src.agent_loop as al
+
+    monkeypatch.setattr(al, "get_setting", lambda key, default=None: default, raising=False)
+    monkeypatch.setattr(al, "get_mcp_manager", lambda: None, raising=False)
+    monkeypatch.setattr(al, "estimate_tokens", lambda *a, **k: 10, raising=False)
+    # Isolate the selection logic from owner gating (tested separately).
+    monkeypatch.setattr(al, "blocked_tools_for_owner", lambda owner: set(), raising=False)
+
+    captured = []
+
+    async def _fake_stream(_candidates, messages, **kwargs):
+        captured.append(kwargs.get("tools"))
+        yield "data: " + json.dumps({"delta": "ok"}) + "\n\n"
+        yield "data: [DONE]\n\n"
+
+    monkeypatch.setattr(al, "stream_llm_with_fallback", _fake_stream, raising=False)
+
+    async def _run():
+        gen = al.stream_agent_loop(
+            "https://api.openai.com/v1", "gpt-test",
+            [{"role": "user", "content": "look at the local project"}],
+            max_rounds=1, relevant_tools=None, owner="admin", workspace=workspace,
+        )
+        return [c async for c in gen]
+
+    asyncio.run(_run())
+    schemas = captured[0] or []
+    return {t["function"]["name"] for t in schemas if isinstance(t, dict) and "function" in t}
+
+
+def test_low_signal_with_workspace_surfaces_file_tools(monkeypatch):
+    names = _sent_tool_names(monkeypatch, workspace="/tmp")
+    assert "read_file" in names
+    assert "get_workspace" in names
+
+
+def test_low_signal_without_workspace_excludes_file_tools(monkeypatch):
+    names = _sent_tool_names(monkeypatch, workspace=None)
+    assert "read_file" not in names
+    assert "get_workspace" not in names
+
+
 # ── browse route is admin-gated ─────────────────────────────────────────
 
 def test_browse_is_admin_gated(monkeypatch):
