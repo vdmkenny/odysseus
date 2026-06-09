@@ -26,19 +26,35 @@ function _basename(p) {
   return parts[parts.length - 1] || p;
 }
 
+// Workspace only applies to agent mode (it scopes the file/shell tools), so the
+// pill + overflow entry are hidden in chat mode, like the bash toggle.
+function _isChatMode() {
+  const b = document.getElementById('mode-chat-btn');
+  return !!(b && b.classList.contains('active'));
+}
+
 export function syncWorkspaceIndicator(path) {
+  const chat = _isChatMode();
   const pill = document.getElementById('workspace-indicator-btn');
   const name = document.getElementById('workspace-indicator-name');
   const overflow = document.getElementById('overflow-workspace-btn');
   if (pill) {
-    pill.style.display = path ? '' : 'none';
+    pill.style.display = (path && !chat) ? '' : 'none';
     pill.classList.toggle('active', !!path);
     if (path) pill.title = `Workspace: ${path}\nFile tools are confined here; bash/python start here but are NOT sandboxed.\nClick to clear.`;
   }
   if (name) name.textContent = path ? _basename(path) : '';
-  if (overflow) overflow.classList.toggle('active', !!path);
+  if (overflow) {
+    overflow.style.display = chat ? 'none' : '';
+    overflow.classList.toggle('active', !!path);
+  }
   // Recompute the "+" overflow dot (app.js owns updatePlusDot via this event).
   try { document.dispatchEvent(new CustomEvent('overflow-state-change')); } catch (_) {}
+}
+
+// Called by the agent/chat mode toggle so the pill + overflow entry follow mode.
+export function applyMode(_mode) {
+  syncWorkspaceIndicator(getWorkspace());
 }
 
 export function setWorkspace(path) {
@@ -158,4 +174,4 @@ export function initWorkspace() {
   if (pill) pill.addEventListener('click', clearWorkspace);
 }
 
-export default { initWorkspace, openWorkspaceBrowser, getWorkspace, setWorkspace, clearWorkspace, syncWorkspaceIndicator };
+export default { initWorkspace, openWorkspaceBrowser, getWorkspace, setWorkspace, clearWorkspace, syncWorkspaceIndicator, applyMode };
