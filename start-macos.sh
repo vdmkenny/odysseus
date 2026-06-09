@@ -182,17 +182,15 @@ else
     echo "▶ Non-ARM macOS detected; skipping Apfel server bootstrap."
 fi
 
-# ChromaDB bootstrap (#3297). The tool index + vector RAG need ChromaDB
-# (default localhost:8100). The macOS native path intentionally avoids Docker,
-# and chromadb ships in the venv, so start a local server ourselves -- otherwise
-# the tool index never initializes and tool/MCP calling silently degrades.
-# Skip if one is already reachable, or if CHROMADB_HOST points at a remote host.
+# ChromaDB backs the tool index and vector RAG. chromadb ships in the venv, so
+# start a local server before launching. Skip when one is already reachable, or
+# when CHROMADB_HOST points at a remote host.
 CHROMA_PID=""
 CHROMA_HOST="${CHROMADB_HOST:-localhost}"   # what the app connects to
 CHROMA_PORT="${CHROMADB_PORT:-8100}"
-# Bind + probe on IPv4 loopback. The app connects to "localhost", which Python
-# resolves to 127.0.0.1; binding chroma to the literal "localhost" can land on
-# IPv6 ::1 instead, leaving the app unable to reach it. Pin both to 127.0.0.1.
+# Bind + probe on IPv4 loopback: the app's "localhost" resolves to 127.0.0.1,
+# but binding chroma to the literal "localhost" can land on IPv6 ::1, which the
+# app can't then reach. Pin both to 127.0.0.1.
 CHROMA_BIN="$(dirname "$VENV_PY")/chroma"
 case "$CHROMA_HOST" in
     localhost|127.0.0.1) CHROMA_BIND="127.0.0.1" ;;
