@@ -41,7 +41,7 @@ export function syncWorkspaceIndicator(path) {
   if (pill) {
     pill.style.display = (path && !chat) ? '' : 'none';
     pill.classList.toggle('active', !!path);
-    if (path) pill.title = `Workspace: ${path}\nFile tools are confined here; bash/python start here but are NOT sandboxed.\nClick to clear.`;
+    if (path) pill.title = `Workspace: ${path}\nFile tools are confined here; shell commands start here but are not sandboxed and can reach outside it.\nClick to clear.`;
   }
   if (name) name.textContent = path ? _basename(path) : '';
   if (overflow) {
