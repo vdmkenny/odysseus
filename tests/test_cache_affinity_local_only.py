@@ -60,3 +60,18 @@ def test_no_session_id_is_a_noop(monkeypatch):
     payload = {}
     llm_core._apply_local_cache_affinity(payload, "http://localhost:8080/v1", None)
     assert payload == {}
+
+
+# Cloud-host sweep absorbed from #3839 (credit: Shabablinchikow) - every cloud
+# API that falls through provider detection to the OpenAI-compatible default
+# must stay clean, not just the Mistral host from the original report.
+@pytest.mark.parametrize("url", [
+    "https://api.mistral.ai/v1/chat/completions",
+    "https://api.deepseek.com/v1/chat/completions",
+    "https://api.x.ai/v1/chat/completions",
+    "https://api.together.xyz/v1/chat/completions",
+    "https://api.fireworks.ai/inference/v1/chat/completions",
+    "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+])
+def test_cloud_openai_compatible_hosts_get_no_affinity_fields(monkeypatch, url):
+    assert _affinity_fields(url, monkeypatch) == {}
