@@ -64,7 +64,7 @@ def _configured_endpoint_kind(url: str) -> Optional[str]:
         return None
 
 
-def _is_local_endpoint(url: str) -> bool:
+def is_local_endpoint(url: str) -> bool:
     """Check if URL points to a local/private/tailscale address."""
     kind = _configured_endpoint_kind(url)
     if kind in ("api", "proxy"):
@@ -219,7 +219,7 @@ def get_context_length(endpoint_url: str, model: str) -> int:
     Falls back to DEFAULT_CONTEXT if unavailable.
     """
     configured_kind = _configured_endpoint_kind(endpoint_url)
-    is_local = _is_local_endpoint(endpoint_url)
+    is_local = is_local_endpoint(endpoint_url)
     # Key on (endpoint_url, model): the same model id can be served by two
     # different remote endpoints with different real context windows (e.g. a
     # capped proxy vs. the full provider), so caching by model id alone would
@@ -273,7 +273,7 @@ def _query_context_length(endpoint_url: str, model: str) -> int:
         return DEFAULT_CONTEXT
 
     # Try llama.cpp /slots endpoint first — reports actual serving context
-    if _is_local_endpoint(endpoint_url):
+    if is_local_endpoint(endpoint_url):
         try:
             base = endpoint_url.split("/v1")[0] if "/v1" in endpoint_url else endpoint_url.rsplit("/", 1)[0]
             r = httpx.get(f"{base}/slots", timeout=REQUEST_TIMEOUT)
@@ -337,7 +337,7 @@ def _query_context_length(endpoint_url: str, model: str) -> int:
     # For local/self-hosted endpoints, trust the API value (user set --max-model-len)
     # For cloud APIs, use the larger value (API can report low defaults)
     if api_ctx and known:
-        _is_local = _is_local_endpoint(endpoint_url)
+        _is_local = is_local_endpoint(endpoint_url)
         if _is_local and api_ctx < known:
             logger.info(f"Local endpoint reports {api_ctx} for {model} (known max: {known}) — using API value")
             return api_ctx
